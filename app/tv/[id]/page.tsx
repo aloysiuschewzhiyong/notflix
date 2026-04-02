@@ -27,21 +27,7 @@ export default async function TVShowPage({
     const resolvedParams = await params;
     const showId = resolvedParams.id;
 
-    const [show, isAvailable] = await Promise.all([
-      getTVShowDetails(showId),
-      checkVidStreamAvailability(showId, "tv"),
-    ]);
-
-    console.log(`TV Show ${showId} availability:`, isAvailable);
-
-    if (!isAvailable) {
-      return (
-        <div className="container mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold mb-4">TV Show Not Available</h1>
-          <p>Sorry, this TV show is not available for streaming.</p>
-        </div>
-      );
-    }
+    const show = await getTVShowDetails(showId);
 
     return (
       <>

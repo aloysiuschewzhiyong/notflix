@@ -1,5 +1,4 @@
-import { searchMulti, checkVidStreamAvailability } from "@/utils/tmdb";
-import { MovieCard } from "@/components/movie-card";
+import { searchMulti } from "@/utils/tmdb";
 import { MovieGrid } from "@/components/movie-grid";
 
 interface SearchPageProps {
@@ -12,43 +11,11 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedParams = await searchParams;
   const query = resolvedParams.q;
 
-  const [movies, tvShows] = await Promise.all([
-    searchMulti(query),
-    searchMulti(query),
-  ]);
+  const results = await searchMulti(query);
 
-  // Filter out results without images and check VidStream availability
-  const filteredMovies = await Promise.all(
-    movies.results
-      .filter((result: any) => result.poster_path || result.backdrop_path)
-      .map(async (result: any) => {
-        const isAvailable = await checkVidStreamAvailability(
-          result.id.toString(),
-          result.media_type
-        );
-        return { ...result, isAvailable };
-      })
-  );
-
-  // Filter out results without images and check VidStream availability
-  const filteredTVShows = await Promise.all(
-    tvShows.results
-      .filter((result: any) => result.poster_path || result.backdrop_path)
-      .map(async (result: any) => {
-        const isAvailable = await checkVidStreamAvailability(
-          result.id.toString(),
-          result.media_type
-        );
-        return { ...result, isAvailable };
-      })
-  );
-
-  // Only show available media
-  const availableMovies = filteredMovies.filter((result) => result.isAvailable);
-
-  // Only show available media
-  const availableTVShows = filteredTVShows.filter(
-    (result) => result.isAvailable
+  // Filter out results without images
+  const filteredResults = results.results.filter(
+    (result: any) => result.poster_path || result.backdrop_path
   );
 
   return (
@@ -57,7 +24,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
         Search Results for &quot;{query}&quot;
       </h1>
 
-      <MovieGrid initialMovies={availableMovies} showLoadMore={false} />
+      <MovieGrid initialMovies={filteredResults} showLoadMore={false} />
     </div>
   );
 }

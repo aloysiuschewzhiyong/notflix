@@ -1,4 +1,4 @@
-const API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const API_KEY = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const BASE_URL = "https://api.themoviedb.org/3";
 
 export async function fetchFromTMDB(
@@ -150,23 +150,12 @@ export async function getTVGenres() {
 }
 
 // Update the VidStream availability check function
+// Note: This check often fails on hosted environments like Vercel due to IP blocking.
+// We return true by default to prevent blocking content on the server.
 export async function checkVidStreamAvailability(id: string, type: string) {
-  try {
-    const response = await fetch(
-      `https://vidsrc.to/embed/${type === "movie" ? "movie" : "tv"}/${id}`,
-      {
-        method: "HEAD", // Only fetch headers, not the full response
-        cache: "no-store", // Don't cache the result
-        next: { revalidate: 0 }, // Don't revalidate
-      }
-    );
-
-    // Check if the response is a redirect (302) or success (200)
-    return response.status === 200 || response.status === 302;
-  } catch (error) {
-    console.error("Error checking VidStream availability:", error);
-    return false;
-  }
+  // Always return true to avoid blocking on the server. 
+  // Let the player handle actual availability.
+  return true;
 }
 
 export async function getTopRatedMovies(page = 1) {

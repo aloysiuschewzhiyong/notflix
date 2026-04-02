@@ -19,21 +19,7 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
     const resolvedParams = await params;
     const movieId = resolvedParams.id;
 
-    const [movie, isAvailable] = await Promise.all([
-      getMovieDetails(movieId),
-      checkVidStreamAvailability(movieId, "movie"),
-    ]);
-
-    console.log(`Movie ${movieId} availability:`, isAvailable);
-
-    if (!isAvailable) {
-      return (
-        <div className="container mx-auto px-4 py-8">
-          <h1 className="text-2xl font-bold mb-4">Movie Not Available</h1>
-          <p>Sorry, this movie is not available for streaming.</p>
-        </div>
-      );
-    }
+    const movie = await getMovieDetails(movieId);
 
     return (
       <>
