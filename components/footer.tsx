@@ -210,8 +210,7 @@ export default function Footer() {
         {/* Copyright */}
         <div className="mt-12 pt-8 border-t text-center">
           <p className="text-sm text-muted-foreground">
-            &copy; {new Date().getFullYear()} by Aloysius Chew. All rights
-            reserved.
+            Made by Aloysius Chew. Check out my <a href="https://chewaloy.vercel.app" target="_blank"  className="hover:text-primary transition-colors underline underline-offset-2">other stuff</a>
           </p>
         </div>
       </div>
