@@ -25,14 +25,14 @@ export function MoviePlayer({
 
   const getEmbedUrl = () => {
     if (mediaType === "movie") {
-      return `https://vidsrc.net/embed/movie/${movieId}`;
+      return `https://vidsrc-me.su/embed/movie/${movieId}`;
     } else if (mediaType === "tv") {
       if (seasonNumber && episodeNumber) {
-        return `https://vidsrc.net/embed/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
+        return `https://vidsrc-me.su/embed/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
       } else if (seasonNumber) {
-        return `https://vidsrc.net/embed/tv/${movieId}/${seasonNumber}`;
+        return `https://vidsrc-me.su/embed/tv/${movieId}/${seasonNumber}`;
       } else {
-        return `https://vidsrc.net/embed/tv/${movieId}`;
+        return `https://vidsrc-me.su/embed/tv/${movieId}`;
       }
     }
     return "";
