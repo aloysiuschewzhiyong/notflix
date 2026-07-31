@@ -62,8 +62,7 @@ export function MoviePlayer({
           height="100%"
           frameBorder="0"
           allowFullScreen
-          webkitallowfullscreen="true"
-          mozallowfullscreen="true"
+          {...({ webkitallowfullscreen: "true", mozallowfullscreen: "true" } as any)}
           allow="encrypted-media"
           className="w-full h-full"
           style={{ border: "none" }}
