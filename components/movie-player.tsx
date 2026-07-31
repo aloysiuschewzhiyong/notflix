@@ -24,18 +24,33 @@ export function MoviePlayer({
   };
 
   const getEmbedUrl = () => {
+    let baseUrl = "";
     if (mediaType === "movie") {
-      return `https://vidsrc-me.su/embed/movie/${movieId}`;
+      baseUrl = `https://player.videasy.net/movie/${movieId}`;
     } else if (mediaType === "tv") {
       if (seasonNumber && episodeNumber) {
-        return `https://vidsrc-me.su/embed/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
+        baseUrl = `https://player.videasy.net/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
       } else if (seasonNumber) {
-        return `https://vidsrc-me.su/embed/tv/${movieId}/${seasonNumber}`;
+        baseUrl = `https://player.videasy.net/tv/${movieId}/${seasonNumber}`;
       } else {
-        return `https://vidsrc-me.su/embed/tv/${movieId}`;
+        baseUrl = `https://player.videasy.net/tv/${movieId}`;
       }
     }
-    return "";
+
+    if (!baseUrl) return "";
+
+    const params = new URLSearchParams({
+      color: "E50914",
+      overlay: "true",
+    });
+
+    if (mediaType === "tv") {
+      params.append("nextEpisode", "true");
+      params.append("autoplayNextEpisode", "true");
+      params.append("episodeSelector", "true");
+    }
+
+    return `${baseUrl}?${params.toString()}`;
   };
 
   return (
@@ -43,8 +58,13 @@ export function MoviePlayer({
       {isPlaying ? (
         <iframe
           src={getEmbedUrl()}
+          width="100%"
+          height="100%"
+          frameBorder="0"
           allowFullScreen
-          allow="autoplay; fullscreen"
+          webkitallowfullscreen="true"
+          mozallowfullscreen="true"
+          allow="encrypted-media"
           className="w-full h-full"
           style={{ border: "none" }}
         />
