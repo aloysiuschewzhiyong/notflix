@@ -24,12 +24,12 @@ export default async function MoviePage({ params, searchParams }: MoviePageProps
     return (
       <>
         <BackdropImage
-          src={`https://image.tmdb.org/t/p/original${movie.backdrop_path}`}
+          src={`https://image.tmdb.org/t/p/w1280${movie.backdrop_path}`}
         />
 
-        <div className="container mx-auto px-4 -mt-56 relative z-10">
+        <div className="container mx-auto px-4 -mt-32 md:-mt-56 relative z-10">
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-1">
+            <div className="hidden md:block md:col-span-1">
               <Image
                 src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
                 alt={movie.title}

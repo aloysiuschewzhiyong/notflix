@@ -1,6 +1,10 @@
 const API_KEY = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const BASE_URL = "https://api.themoviedb.org/3";
 
+// Cache TMDB responses on the server for an hour. Without this every page view
+// re-fetches the list plus a content-rating lookup per title (~21 requests).
+const cachedFetch = (url: string) => fetch(url, { next: { revalidate: 60 * 60 } });
+
 export async function fetchFromTMDB(
   endpoint: string,
   params: Record<string, string> = {}
@@ -33,7 +37,7 @@ export async function fetchFromTMDB(
 }
 
 export async function getPopularMovies(page = 1, genreId?: number) {
-  const res = await fetch(
+  const res = await cachedFetch(
     `${BASE_URL}/movie/popular?api_key=${API_KEY}&page=${page}&language=en-US${
       genreId ? `&with_genres=${genreId}` : ""
     }`
@@ -73,7 +77,7 @@ function determineBgPosition(movieId: number) {
 }
 
 export async function getPopularTVShows(page = 1) {
-  const res = await fetch(
+  const res = await cachedFetch(
     `${BASE_URL}/trending/tv/week?api_key=${API_KEY}&page=${page}&language=en-US`
   );
   const data = await res.json();
@@ -100,7 +104,7 @@ export async function searchMulti(query: string, page = 1) {
 }
 
 export async function getMovieDetails(movieId: string) {
-  const response = await fetch(
+  const response = await cachedFetch(
     `https://api.themoviedb.org/3/movie/${movieId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits,release_dates`
   );
   const data = await response.json();
@@ -113,7 +117,7 @@ export async function getMovieDetails(movieId: string) {
 }
 
 export async function getTVShowDetails(tvShowId: string) {
-  const response = await fetch(
+  const response = await cachedFetch(
     `https://api.themoviedb.org/3/tv/${tvShowId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits,content_ratings`
   );
   const data = await response.json();
@@ -123,6 +127,41 @@ export async function getTVShowDetails(tvShowId: string) {
     ...data,
     content_rating: contentRating,
   };
+}
+
+export interface MediaListItem {
+  id: number;
+  media_type: "movie" | "tv";
+  title?: string;
+  name?: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  vote_average: number;
+  release_date?: string;
+  first_air_date?: string;
+  genre_ids?: number[];
+}
+
+// Plain list fetch (no per-item content rating lookups) for home page rows
+export async function getMediaList(
+  endpoint: string,
+  params: Record<string, string> = {},
+  mediaType?: "movie" | "tv"
+): Promise<MediaListItem[]> {
+  try {
+    const data = await fetchFromTMDB(endpoint, { language: "en-US", ...params });
+    return (data.results ?? [])
+      .map((m: any) => ({ ...m, media_type: m.media_type ?? mediaType }))
+      .filter(
+        (m: any) =>
+          (m.media_type === "movie" || m.media_type === "tv") &&
+          m.poster_path &&
+          m.vote_average > 0
+      );
+  } catch {
+    return [];
+  }
 }
 
 export async function getSeasonDetails(tvId: string, seasonNumber: number) {
@@ -159,7 +198,7 @@ export async function checkVidStreamAvailability(id: string, type: string) {
 }
 
 export async function getTopRatedMovies(page = 1) {
-  const res = await fetch(
+  const res = await cachedFetch(
     `${BASE_URL}/movie/top_rated?api_key=${API_KEY}&page=${page}`
   );
   const data = await res.json();
@@ -186,7 +225,7 @@ export async function getTopRatedMovies(page = 1) {
 
 export async function getMoviesByReleaseDate(page = 1) {
   const today = new Date().toISOString().split("T")[0]; // Get today's date in YYYY-MM-DD format
-  const res = await fetch(
+  const res = await cachedFetch(
     `${BASE_URL}/discover/movie?api_key=${API_KEY}&sort_by=release_date.desc&page=${page}&release_date.lte=${today}`
   );
   return res.json();
@@ -195,7 +234,7 @@ export async function getMoviesByReleaseDate(page = 1) {
 export async function getMovieContentRating(movieId: number) {
   try {
     const url = `https://api.themoviedb.org/3/movie/${movieId}/release_dates?api_key=${process.env.TMDB_API_KEY}`;
-    const response = await fetch(url);
+    const response = await cachedFetch(url);
     if (!response.ok) {
       return "NR";
     }
@@ -281,7 +320,7 @@ export async function getMoviesByGenreAndSort(
       params["sort_by"] = sort;
   }
 
-  const response = await fetch(
+  const response = await cachedFetch(
     `${BASE_URL}${endpoint}?${new URLSearchParams(params)}`
   );
   const data = await response.json();
@@ -349,7 +388,7 @@ export async function getTVShowsByGenreAndSort(
       params["vote_count.gte"] = "100";
   }
 
-  const response = await fetch(
+  const response = await cachedFetch(
     `${BASE_URL}${endpoint}?${new URLSearchParams(params)}`
   );
   const data = await response.json();
@@ -372,7 +411,7 @@ export async function getTVShowsByGenreAndSort(
 }
 
 export async function getTopRatedTVShows(page = 1) {
-  const res = await fetch(
+  const res = await cachedFetch(
     `${BASE_URL}/tv/top_rated?api_key=${API_KEY}&page=${page}`
   );
   const data = await res.json();
@@ -407,7 +446,7 @@ export function getTVContentRating(show: any) {
 export async function getTVShowContentRating(tvShowId: number) {
   try {
     const url = `https://api.themoviedb.org/3/tv/${tvShowId}/content_ratings?api_key=${process.env.TMDB_API_KEY}`;
-    const response = await fetch(url);
+    const response = await cachedFetch(url);
     if (!response.ok) {
       return "NR";
     }
@@ -437,7 +476,7 @@ export async function getTVShowContentRating(tvShowId: number) {
 
 // Function to get movie list with ratings
 export async function getMoviesList(endpoint: string) {
-  const response = await fetch(
+  const response = await cachedFetch(
     `https://api.themoviedb.org/3${endpoint}?api_key=${process.env.TMDB_API_KEY}`
   );
   const data = await response.json();
@@ -467,7 +506,7 @@ export async function getTVShowsList(
   // Convert params object to URL search params
   const searchParams = new URLSearchParams(params);
 
-  const response = await fetch(
+  const response = await cachedFetch(
     `https://api.themoviedb.org/3${endpoint}?api_key=${
       process.env.TMDB_API_KEY
     }&${searchParams.toString()}`
@@ -494,7 +533,7 @@ export async function getTVShowsList(
 export async function getSeriesList(page: number = 1) {
   try {
     // First get the list of TV shows
-    const response = await fetch(
+    const response = await cachedFetch(
       `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}`
     );
     const data = await response.json();

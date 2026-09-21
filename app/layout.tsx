@@ -4,6 +4,7 @@ import Header from "@/components/header";
 import Footer from "@/components/footer";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
+import { getMovieGenres, getTVGenres, getMediaList } from "@/utils/tmdb";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -12,11 +13,24 @@ export const metadata = {
   description: "Arr pirate movies and tv",
 };
 
-export default function RootLayout({
+// Header data is non-critical: fall back to empty lists if TMDB is unreachable
+async function getHeaderData() {
+  const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+  const [movieGenres, tvGenres, trending] = await Promise.all([
+    safe(getMovieGenres(), []),
+    safe(getTVGenres(), []),
+    getMediaList("/trending/all/day"),
+  ]);
+  return { movieGenres, tvGenres, trending: trending.slice(0, 6) };
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const headerData = await getHeaderData();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} min-h-screen flex flex-col`}>
@@ -26,7 +40,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
+          <Header {...headerData} />
           <main className="flex-grow">{children}</main>
           <Analytics />
           <Footer />

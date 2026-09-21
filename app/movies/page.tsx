@@ -5,8 +5,8 @@ import {
   getMoviesByReleaseDate,
   getMoviesByGenreAndSort,
 } from "@/utils/tmdb";
-import { MovieGrid } from "@/components/movie-grid";
-import { GenreSelector } from "@/components/genre-selector";
+import { BrowseHero } from "@/components/browse-hero";
+import { BrowseView } from "@/components/browse-view";
 import { loadMoreMovies } from "../actions";
 import { SORT_OPTIONS } from "@/utils/sort-options";
 
@@ -38,28 +38,29 @@ export default async function MoviesPage({ searchParams }: MoviesPageProps) {
   const sortLabel =
     SORT_OPTIONS.movie.find((opt) => opt.value === sort)?.label ?? "Popular";
 
+  const noun = "Movies";
+  // Avoid "TV Movie Movies"
+  const genreLabel = genreName?.replace(/ Movie$/, "");
+  const title = genreLabel ? `${sortLabel} ${genreLabel} ${noun}` : `${sortLabel} ${noun}`;
+  const total = initialMovies.total_results as number | undefined;
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">
-          {genreName
-            ? `${sortLabel} ${genreName} Movies`
-            : `${sortLabel} Movies`}
-        </h1>
-      </div>
-      <GenreSelector
-        genres={genres}
-        selectedGenreId={genreId}
-        mediaType="movie"
+    <>
+      <BrowseHero
+        eyebrow={genreName ?? "All genres"}
+        title={title}
+        subtitle={total ? `${total.toLocaleString()} titles to explore` : undefined}
+        items={initialMovies.results}
       />
-      <MovieGrid
+      <BrowseView
         key={`movies-${genreId || "all"}-${sort}`}
-        title=""
-        initialMovies={initialMovies.results}
-        loadMore={loadMoreMovies}
+        mediaType="movie"
+        genres={genres}
         genreId={genreId}
         sort={sort}
+        initialItems={initialMovies.results}
+        loadMore={loadMoreMovies}
       />
-    </div>
+    </>
   );
 }

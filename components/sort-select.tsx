@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/select";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SORT_OPTIONS } from "@/utils/sort-options";
+import { cn } from "@/lib/utils";
 
-export function SortSelect() {
+export function SortSelect({ className }: { className?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -39,10 +40,10 @@ export function SortSelect() {
 
   return (
     <Select value={currentSort} onValueChange={handleSortChange}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger className={cn("w-full", className)} aria-label="Sort by">
         <SelectValue placeholder="Sort by" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="bg-background/85 backdrop-blur-xl">
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}

@@ -1,14 +1,6 @@
 "use server";
 
-import {
-  getPopularMovies,
-  getPopularTVShows,
-  getTopRatedMovies,
-  getMoviesByReleaseDate,
-  getMoviesByGenreAndSort,
-  getTopRatedTVShows,
-  getTVShowsByGenreAndSort,
-} from "@/utils/tmdb";
+import { getMoviesByGenreAndSort, getTVShowsByGenreAndSort } from "@/utils/tmdb";
 
 export async function loadMoreMovies(
   page: number,
@@ -16,18 +8,12 @@ export async function loadMoreMovies(
   sort?: string
 ) {
   try {
-    let response;
-    if (genreId) {
-      response = await getMoviesByGenreAndSort(
-        genreId,
-        sort || "popularity.desc",
-        page
-      );
-    } else if (sort === "top_rated") {
-      response = await getTopRatedMovies(page);
-    } else {
-      response = await getPopularMovies(page);
-    }
+    // Same helper as the initial page load so every sort option paginates correctly
+    const response = await getMoviesByGenreAndSort(
+      genreId || 0,
+      sort || "popularity.desc",
+      page
+    );
 
     return (
       response?.results?.map((movie: any, index: number) => ({

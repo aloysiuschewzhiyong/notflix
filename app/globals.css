@@ -4,26 +4,31 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    /* Light theme: off-white canvas, white surfaces, higher-contrast muted text */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 240 10% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    --popover-foreground: 240 10% 8%;
+    --primary: 240 10% 10%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --secondary: 240 5% 92%;
+    --secondary-foreground: 240 10% 10%;
+    --muted: 240 5% 93%;
+    --muted-foreground: 240 4% 38%;
+    --accent: 240 5% 92%;
+    --accent-foreground: 240 10% 10%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
+    --border: 240 6% 87%;
+    --input: 240 6% 85%;
+    --ring: 357 92% 47%;
     --radius: 0.5rem;
+    /* Notflix red, shared by both themes */
+    --brand: 357 92% 47%;
+    /* Card hover glow: dark on light backgrounds, light on dark */
+    --glow: rgba(0, 0, 0, 0.35);
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -51,6 +56,8 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
+    --brand: 357 92% 52%;
+    --glow: rgba(255, 255, 255, 0.4);
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -68,3 +75,24 @@
   }
 }
 
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Frosted-glass surfaces, tuned for both themes */
+  .glass {
+    @apply bg-white/60 dark:bg-white/[0.06] backdrop-blur-xl border border-black/[0.06] dark:border-white/10 shadow-[0_8px_32px_-12px_rgba(0,0,0,0.25)];
+  }
+  /* Chips sit on an already-blurred .glass surface, so no blur of their own:
+     nested backdrop filters are recomposited every scroll frame */
+  .glass-chip {
+    @apply bg-white/60 dark:bg-white/[0.07] border border-black/[0.08] dark:border-white/10;
+  }
+}

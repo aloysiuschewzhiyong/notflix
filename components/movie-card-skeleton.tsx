@@ -1,16 +1,7 @@
-"use client";
-
 export function MovieCardSkeleton() {
   return (
-    <div className="relative h-full">
-      <div className="w-full aspect-[2/3] rounded-lg bg-muted animate-pulse" />
-      <div className="p-4 space-y-3">
-        <div className="h-4 w-3/4 bg-muted animate-pulse rounded" />
-        <div className="flex gap-2">
-          <div className="h-3 w-16 bg-muted animate-pulse rounded" />
-          <div className="h-3 w-16 bg-muted animate-pulse rounded" />
-        </div>
-      </div>
+    <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted animate-pulse">
+      <div className="absolute inset-x-2 bottom-2 h-12 rounded-lg bg-foreground/5" />
     </div>
   );
 }

@@ -1,122 +1,92 @@
-import { MovieGrid } from "@/components/movie-grid";
-import {
-  getPopularMovies,
-  getPopularTVShows,
-  getMovieGenres,
-  getTVGenres,
-} from "@/utils/tmdb";
-import { loadMoreMovies, loadMoreTVShows } from "./actions";
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { HeroSection } from "@/components/hero-section";
+import { MediaRow } from "@/components/media-row";
+import { ContinueWatchingRow } from "@/components/watch-progress";
+import { getMediaList, getMovieGenres } from "@/utils/tmdb";
+
+const GENRE_ROWS = [
+  { title: "Action Movies", type: "movie", genreId: 28 },
+  { title: "Crime Series", type: "tv", genreId: 80 },
+  { title: "Comedy Movies", type: "movie", genreId: 35 },
+  { title: "Sci-Fi & Fantasy Series", type: "tv", genreId: 10765 },
+] as const;
 
 export default async function Home() {
-  const [popularMovies, popularTVShows, movieGenres, tvGenres] =
-    await Promise.all([
-      getPopularMovies(),
-      getPopularTVShows(),
-      getMovieGenres(),
-      getTVGenres(),
-    ]);
-
-  const getRandomGenre = (genres: any[]) => {
-    return genres[Math.floor(Math.random() * genres.length)];
-  };
-
-  const randomMovieGenre = getRandomGenre(movieGenres);
-  const randomTVGenre = getRandomGenre(tvGenres);
-
-  const validMovies = popularMovies.results.filter(
-    (m) => m.backdrop_path && m.poster_path && m.vote_average > 0
-  );
-
-  const moviesByGenre = validMovies.filter((movie: any) =>
-    movie.genre_ids.includes(randomMovieGenre.id)
-  );
-  const tvShowsByGenre = popularTVShows.results.filter((show: any) =>
-    show.genre_ids.includes(randomTVGenre.id)
-  );
+  const [
+    heroItems,
+    trendingMovies,
+    trendingSeries,
+    nowPlaying,
+    topRatedMovies,
+    topRatedSeries,
+    movieGenres,
+    ...genreRows
+  ] = await Promise.all([
+    getMediaList("/trending/all/week"),
+    getMediaList("/trending/movie/week", {}, "movie"),
+    getMediaList("/trending/tv/week", {}, "tv"),
+    getMediaList("/movie/now_playing", {}, "movie"),
+    getMediaList("/movie/top_rated", {}, "movie"),
+    getMediaList("/tv/top_rated", {}, "tv"),
+    getMovieGenres(),
+    ...GENRE_ROWS.map((row) =>
+      getMediaList(
+        `/discover/${row.type}`,
+        { with_genres: String(row.genreId), sort_by: "popularity.desc" },
+        row.type
+      )
+    ),
+  ]);
 
   return (
-    <div>
-      <HeroSection movies={popularMovies.results} />
+    <div className="pb-16">
+      <HeroSection items={heroItems} />
 
-      {/* Content Sections */}
-      <div className="container mx-auto px-6 py-12 space-y-16">
-        {/* Popular Movies Section */}
-        <section>
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">Popular Movies</h2>
-            <Link
-              href="/movies"
-              className="flex items-center text-primary hover:underline"
-            >
-              View All <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
+      <div className="relative z-10 mt-6 md:-mt-16 space-y-8 md:space-y-12">
+        <ContinueWatchingRow />
+        <MediaRow title="Trending Movies" items={trendingMovies} href="/movies" />
+        <MediaRow
+          title="Top 10 Series This Week"
+          items={trendingSeries}
+          href="/series"
+          variant="ranked"
+        />
+        <MediaRow title="New in Theaters" items={nowPlaying} />
+        <MediaRow
+          title="Top Rated Movies"
+          items={topRatedMovies}
+          href="/movies?sort=top_rated"
+        />
+
+        {/* Genre quick links */}
+        <section className="px-4 md:px-12">
+          <h2 className="text-xl md:text-2xl font-bold mb-3">Browse by Genre</h2>
+          <div className="flex flex-wrap gap-2">
+            {movieGenres.map((g: { id: number; name: string }) => (
+              <Link
+                key={g.id}
+                href={`/movies?genreId=${g.id}`}
+                className="rounded-full border px-4 py-1.5 text-sm hover:bg-secondary transition-colors"
+              >
+                {g.name}
+              </Link>
+            ))}
           </div>
-          <MovieGrid
-            title=""
-            initialMovies={popularMovies.results.slice(0, 10)}
-            showLoadMore={false}
-          />
         </section>
 
-        {/* Popular TV Shows Section */}
-        <section>
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">Popular TV Shows</h2>
-            <Link
-              href="/series"
-              className="flex items-center text-primary hover:underline"
-            >
-              View All <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </div>
-          <MovieGrid
-            title=""
-            initialMovies={popularTVShows.results.slice(0, 10)}
-            showLoadMore={false}
+        {GENRE_ROWS.map((row, i) => (
+          <MediaRow
+            key={row.title}
+            title={row.title}
+            items={genreRows[i]}
+            href={`/${row.type === "movie" ? "movies" : "series"}?genreId=${row.genreId}`}
           />
-        </section>
-
-        {/* Genre Sections */}
-        <section>
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">
-              {randomMovieGenre.name} Movies
-            </h2>
-            <Link
-              href={`/movies?genreId=${randomMovieGenre.id}`}
-              className="flex items-center text-primary hover:underline"
-            >
-              View All <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </div>
-          <MovieGrid
-            title=""
-            initialMovies={moviesByGenre.slice(0, 10)}
-            showLoadMore={false}
-          />
-        </section>
-
-        <section>
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-3xl font-bold">
-              {randomTVGenre.name} TV Shows
-            </h2>
-            <Link
-              href={`/series?genreId=${randomTVGenre.id}`}
-              className="flex items-center text-primary hover:underline"
-            >
-              View All <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </div>
-          <MovieGrid
-            title=""
-            initialMovies={tvShowsByGenre.slice(0, 10)}
-            showLoadMore={false}
-          />
-        </section>
+        ))}
+        <MediaRow
+          title="Top Rated Series"
+          items={topRatedSeries}
+          href="/series?sort=top_rated"
+        />
       </div>
     </div>
   );

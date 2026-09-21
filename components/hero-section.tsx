@@ -1,172 +1,179 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronLeft, ChevronRight, Info, Star, ListVideo } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import type { MediaListItem } from "@/utils/tmdb";
 
-interface MovieWithPosition {
-  id: number;
-  backdrop_path: string;
-  title?: string;
-  bgPosition?: string;
-}
+const SLIDE_MS = 8000;
 
-export function HeroSection({ movies }: { movies: MovieWithPosition[] }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [scrollY, setScrollY] = useState(0);
-  const validMovies = movies.filter((m) => m.backdrop_path);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+export function HeroSection({ items }: { items: MediaListItem[] }) {
+  const slides = items.filter((m) => m.backdrop_path).slice(0, 6);
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchStartX = useRef<number | null>(null);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  const go = useCallback(
+    (delta: number) =>
+      setIndex((i) => (i + delta + slides.length) % slides.length),
+    [slides.length]
+  );
 
   useEffect(() => {
-    startInterval();
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [validMovies.length]);
+    if (paused || slides.length < 2) return;
+    const t = setTimeout(() => go(1), SLIDE_MS);
+    return () => clearTimeout(t);
+  }, [index, paused, go, slides.length]);
 
-  const startInterval = () => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % validMovies.length);
-    }, 5000);
-  };
+  if (!slides.length) return null;
 
-  const handleNext = () => {
-    setActiveIndex((prev) => (prev + 1) % validMovies.length);
-    startInterval();
-  };
+  const item = slides[index];
+  const title = item.title ?? item.name ?? "";
+  const year = (item.release_date ?? item.first_air_date)?.slice(0, 4);
+  const href = `/${item.media_type}/${item.id}`;
 
-  const handlePrev = () => {
-    setActiveIndex(
-      (prev) => (prev - 1 + validMovies.length) % validMovies.length
-    );
-    startInterval();
-  };
-
-  // Helper function to determine optimal background position
-  const getBgPosition = (movie: MovieWithPosition) => {
-    // You could store these positions in the movie object or determine them based on movie ID
-    const positionMap: { [key: number]: string } = {
-      238: "50% 25%", // Godfather
-      278: "50% 15%", // Shawshank
-      680: "50% 0%", // Pulp Fiction
-      // Add more movies with their optimal positions
-    };
-
-    return positionMap[movie.id] || "50% 15%"; // Default position if not specified
-  };
-
-  if (validMovies.length === 0) return null;
+  const controls = slides.length > 1 && (
+    <div className="flex items-center gap-2 md:gap-3">
+      <button
+        onClick={() => go(-1)}
+        className="p-2 rounded-full bg-background/60 backdrop-blur-sm border border-black/10 dark:border-white/10 shadow-sm hover:bg-background/80 transition"
+        aria-label="Previous slide"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </button>
+      <div className="flex">
+        {slides.map((s, i) => (
+          // Padding gives each dot a touch-friendly hit area
+          <button
+            key={s.id}
+            onClick={() => setIndex(i)}
+            aria-label={`Show ${s.title ?? s.name}`}
+            aria-current={i === index}
+            className="h-8 px-1.5 flex items-center"
+          >
+            <span
+              className={cn(
+                "block h-1.5 rounded-full transition-all",
+                i === index ? "w-6 bg-foreground" : "w-1.5 bg-foreground/40"
+              )}
+            />
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={() => go(1)}
+        className="p-2 rounded-full bg-background/60 backdrop-blur-sm border border-black/10 dark:border-white/10 shadow-sm hover:bg-background/80 transition"
+        aria-label="Next slide"
+      >
+        <ChevronRight className="h-5 w-5" />
+      </button>
+    </div>
+  );
 
   return (
-    <div className="relative h-[40vh] md:h-[75vh] flex items-center overflow-hidden">
-      {/* Navigation Arrows */}
-      <div className="absolute top-1/2 -translate-y-1/2 left-4 z-30 hidden sm:block">
-        <button
-          onClick={handlePrev}
-          className="p-1.5 rounded-full bg-background/80 hover:bg-background transition-all"
-          aria-label="Previous slide"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-      </div>
-
-      <div className="absolute top-1/2 -translate-y-1/2 right-4 z-30 hidden sm:block">
-        <button
-          onClick={handleNext}
-          className="p-1.5 rounded-full bg-background/80 hover:bg-background transition-all"
-          aria-label="Next slide"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      </div>
-
-      <AnimatePresence mode="wait">
-        {validMovies.map(
-          (movie, index) =>
-            index === activeIndex && (
-              <motion.div
-                key={movie.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 z-0"
-              >
-                <Link
-                  href={`/${movie.title ? "movie" : "tv"}/${movie.id}`}
-                  className="absolute inset-0 z-10 pointer-events-auto"
-                >
-                  <div className="relative w-full h-full overflow-hidden">
-                    <div
-                      className="absolute inset-0 h-[250%] sm:h-[180%] -top-[40%] sm:-top-[20%]"
-                      style={{ transform: `translateY(${scrollY * 0.5}px)` }}
-                    >
-                      <div
-                        className="absolute inset-0 bg-cover transition-transform duration-300"
-                        style={{
-                          backgroundImage: `url(https://image.tmdb.org/t/p/original${movie.backdrop_path})`,
-                          backgroundPosition: "50% 30%",
-                        }}
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/20" />
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            )
-        )}
-      </AnimatePresence>
-
-      <div className="container mx-auto px-6 relative z-20 pointer-events-none">
-        <motion.div className="pointer-events-auto max-w-[90%] md:max-w-none">
-          <motion.h1
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8 }}
-            className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 md:mb-4 max-w-2xl"
-          >
-            Unlimited Movies & TV Shows
-          </motion.h1>
-          <motion.p
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="text-sm sm:text-base md:text-lg text-muted-foreground mb-6 md:mb-8 max-w-xl"
-          >
-            Stream your favorite content anytime, anywhere. Start exploring now.
-          </motion.p>
+    // Mobile: image in a 4:3 frame with the text below it.
+    // Desktop: full-bleed image with the text overlaid.
+    <section
+      className="relative md:h-[80vh] md:min-h-[520px] overflow-hidden"
+      onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
+      onTouchStart={(e) => {
+        touchStartX.current = e.touches[0].clientX;
+      }}
+      onTouchEnd={(e) => {
+        if (touchStartX.current === null) return;
+        const dx = e.changedTouches[0].clientX - touchStartX.current;
+        touchStartX.current = null;
+        if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+      }}
+      aria-roledescription="carousel"
+    >
+      <div className="relative aspect-[4/3] sm:aspect-video md:aspect-auto md:absolute md:inset-0">
+        <AnimatePresence initial={false}>
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            className="flex gap-3"
+            key={item.id}
+            initial={{ opacity: 0, scale: 1.04 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.9, ease: "easeOut" }}
+            className="absolute inset-0"
           >
-            <Link
-              href="/movies"
-              className="bg-primary text-primary-foreground px-4 py-2 text-sm md:text-base rounded-md hover:opacity-90 transition text-center"
-            >
-              Browse Movies
-            </Link>
-            <Link
-              href="/series"
-              className="bg-secondary text-secondary-foreground px-4 py-2 text-sm md:text-base rounded-md hover:opacity-90 transition text-center"
-            >
-              Browse TV Shows
-            </Link>
+            <Image
+              src={`https://image.tmdb.org/t/p/w1280${item.backdrop_path}`}
+              alt=""
+              fill
+              priority={index === 0}
+              sizes="100vw"
+              className="object-cover object-[50%_25%]"
+            />
           </motion.div>
-        </motion.div>
+        </AnimatePresence>
+
+        {/* Readability gradients: left for overlaid text (desktop), bottom to blend */}
+        <div className="hidden md:block absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 md:h-2/5 bg-gradient-to-t from-background to-transparent" />
       </div>
-    </div>
+
+      <div className="relative z-10 px-4 md:px-12 -mt-16 md:mt-0 md:h-full flex md:items-end md:pb-32">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={item.id}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.5 }}
+            className="max-w-xl w-full"
+          >
+            <span className="inline-block text-[11px] md:text-xs font-semibold tracking-widest uppercase text-brand mb-2 md:mb-3">
+              {item.media_type === "movie" ? "Movie" : "Series"} · Trending #
+              {index + 1}
+            </span>
+            <h1 className="text-2xl sm:text-4xl md:text-6xl font-extrabold leading-tight mb-2 md:mb-3 drop-shadow line-clamp-2">
+              {title}
+            </h1>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground mb-3 md:mb-4">
+              <span className="flex items-center gap-1 text-foreground">
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                {item.vote_average.toFixed(1)}
+              </span>
+              {year && <span>{year}</span>}
+            </div>
+            <p className="text-sm md:text-base text-muted-foreground line-clamp-2 md:line-clamp-3 mb-4 md:mb-6">
+              {item.overview}
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2 md:gap-3">
+                <Button asChild size="lg" className="h-10 md:h-11">
+                  <Link href={href}>
+                    <Info className="h-4 w-4" />
+                    More Info
+                  </Link>
+                </Button>
+                {item.media_type === "tv" && (
+                  <Button asChild size="lg" variant="secondary" className="h-10 md:h-11">
+                    <Link href={`${href}#episodes`}>
+                      <ListVideo className="h-4 w-4" />
+                      Episodes
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {controls && (
+        <>
+          {/* Mobile: controls centred under the text; desktop: bottom-right */}
+          <div className="md:hidden flex justify-center mt-3">{controls}</div>
+          <div className="hidden md:block absolute z-20 bottom-24 right-12">{controls}</div>
+        </>
+      )}
+    </section>
   );
 }

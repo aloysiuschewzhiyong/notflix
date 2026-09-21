@@ -1,561 +1,261 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { ChevronDownIcon, Search, Menu, X } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { getMovieGenres, getTVGenres } from "@/utils/tmdb";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SearchBox } from "@/components/search-box";
+import { cn } from "@/lib/utils";
+import type { MediaListItem } from "@/utils/tmdb";
 
 interface Genre {
   id: number;
   name: string;
 }
 
-const navItemVariants = {
-  hidden: { opacity: 0, y: -10 },
-  visible: (delay: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.5,
-      delay: delay * 0.1,
-      ease: [0.4, 0, 0.2, 1],
-    },
-  }),
-};
+type MenuKey = "movie" | "tv";
 
-const dropdownVariants = {
-  hidden: { opacity: 0, y: -5 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.15,
-      ease: "easeOut",
-    },
-  },
-  exit: {
-    opacity: 0,
-    y: -5,
-    transition: {
-      duration: 0.1,
-      ease: "easeIn",
-    },
-  },
-};
+interface HeaderProps {
+  movieGenres: Genre[];
+  tvGenres: Genre[];
+  trending: MediaListItem[];
+}
 
-const searchVariants = {
-  hidden: { opacity: 0, x: 20 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: {
-      duration: 0.5,
-      delay: 0.4,
-      ease: [0.4, 0, 0.2, 1],
-    },
-  },
-};
+// Springy hover/tap from the original header
+const navMotion = {
+  whileHover: { scale: 1.03 },
+  whileTap: { scale: 0.97 },
+  transition: { type: "spring", stiffness: 400, damping: 20 },
+} as const;
 
-export default function Header() {
-  const [search, setSearch] = useState("");
-  const [mounted, setMounted] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const router = useRouter();
+const NAV_ITEMS: {
+  label: string;
+  href: string;
+  menu?: MenuKey;
+  match: (p: string) => boolean;
+}[] = [
+  { label: "Home", href: "/", match: (p) => p === "/" },
+  {
+    label: "Movies",
+    href: "/movies",
+    menu: "movie",
+    match: (p) => p.startsWith("/movies") || p.startsWith("/movie/"),
+  },
+  {
+    label: "Series",
+    href: "/series",
+    menu: "tv",
+    match: (p) => p.startsWith("/series") || p.startsWith("/tv/"),
+  },
+];
+
+const MENU_CLOSE_DELAY = 150;
+
+export default function Header({ movieGenres, tvGenres, trending }: HeaderProps) {
   const pathname = usePathname();
-  const [isMoviesOpen, setIsMoviesOpen] = useState(false);
-  const [isSeriesOpen, setIsSeriesOpen] = useState(false);
-  const [movieGenres, setMovieGenres] = useState<Genre[]>([]);
-  const [tvGenres, setTVGenres] = useState<Genre[]>([]);
+  const lastMenu = useRef<MenuKey>("movie");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [menu, setMenu] = useState<MenuKey | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const headerRef = useRef<HTMLElement>(null);
 
+  // Close menus/search when navigating
   useEffect(() => {
-    setMounted(true);
+    setMobileSearchOpen(false);
+    setMenu(null);
+  }, [pathname]);
+
+  // Publish the header height so sticky elements (e.g. browse toolbars) can sit below it
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() =>
+      document.documentElement.style.setProperty("--header-h", `${el.offsetHeight}px`)
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
+  // Escape or clicking outside closes the genre menu
   useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const [movieGenresData, tvGenresData] = await Promise.all([
-          getMovieGenres(),
-          getTVGenres(),
-        ]);
-        setMovieGenres(movieGenresData);
-        setTVGenres(tvGenresData);
-      } catch (error) {
-        console.error("Error fetching genres:", error);
-      }
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    const onClick = (e: MouseEvent) => {
+      if (!headerRef.current?.contains(e.target as Node)) setMenu(null);
     };
-    fetchGenres();
-  }, []);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
+  }, [menu]);
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  // Hover intent: open immediately, close after a short delay so the pointer
+  // can travel from the nav link down into the panel
+  const openMenu = (key: MenuKey) => {
+    clearTimeout(closeTimer.current);
+    setMenu(key);
+  };
+  const scheduleClose = () => {
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setMenu(null), MENU_CLOSE_DELAY);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (search.trim()) {
-      router.push(`/search?q=${encodeURIComponent(search.trim())}`);
-      setSearch("");
-      scrollToTop();
-    }
-  };
+  const navLinks = (mobile: boolean) =>
+    NAV_ITEMS.map((item) => {
+      const active = item.match(pathname);
+      const hasMenu = !!item.menu;
+      return (
+        <div
+          key={item.href}
+          className="flex items-center"
+          onPointerEnter={(e) =>
+            !mobile && hasMenu && e.pointerType === "mouse" && openMenu(item.menu!)
+          }
+          onPointerLeave={(e) => !mobile && e.pointerType === "mouse" && scheduleClose()}
+        >
+          <motion.span {...navMotion} className="inline-block">
+            <Link
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "block py-2 transition-colors hover:text-primary",
+                active ? "text-foreground font-semibold" : "text-muted-foreground",
+                menu === item.menu && hasMenu && "text-primary"
+              )}
+            >
+              {item.label}
+            </Link>
+          </motion.span>
+          {hasMenu && (
+            // Click/tap/keyboard access to the genre menu (hover isn't available on touch)
+            <button
+              type="button"
+              onClick={() => setMenu((m) => (m === item.menu ? null : item.menu!))}
+              aria-label={`${item.label} genres`}
+              aria-expanded={menu === item.menu}
+              className="p-1.5 -mr-1.5 text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 transition-transform",
+                  menu === item.menu && "rotate-180"
+                )}
+              />
+            </button>
+          )}
+        </div>
+      );
+    });
 
-  const closeMenu = () => {
-    setIsMenuOpen(false);
-    setIsMoviesOpen(false);
-    setIsSeriesOpen(false);
-  };
-
-  const handleNavigation = (path: string) => {
-    router.push(path);
-    closeMenu();
-    scrollToTop();
-  };
-
-  const handleGenreSelect = (genreId: number, mediaType: "movie" | "tv") => {
-    const path = `/${
-      mediaType === "movie" ? "movies" : "series"
-    }?genreId=${genreId}`;
-    closeMenu();
-
-    if (
-      pathname.startsWith(`/${mediaType === "movie" ? "movies" : "series"}`)
-    ) {
-      router.replace(path);
-    } else {
-      router.push(path);
-    }
-    scrollToTop();
-  };
-
-  if (!mounted) {
-    return <header className="h-16" />;
-  }
+  // Keep showing the last menu's content while the panel animates out
+  if (menu) lastMenu.current = menu;
+  const shown = lastMenu.current;
+  const genres = shown === "movie" ? movieGenres : tvGenres;
+  const base = shown === "movie" ? "/movies" : "/series";
 
   return (
-    <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-sm border-b">
-      <div className="container mx-auto px-6 py-6">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="relative w-24 h-10">
-            <Image
-              src="/logo.png"
-              alt="Notflix"
-              fill
-              className="object-contain"
-              priority
-            />
+    <header
+      ref={headerRef}
+      className="sticky top-0 z-50 border-b"
+    >
+      {/* Glass background lives on its own layer: a backdrop-filter on the header
+          itself would stop the dropdown panels from blurring the page behind them */}
+      <div aria-hidden className="absolute inset-0 -z-10 bg-background/80 backdrop-blur-sm" />
+      <div className="px-4 md:px-12 md:py-2">
+        <div className="flex h-16 md:h-[72px] items-center gap-10">
+          <Link href="/" className="relative w-24 md:w-28 h-10 shrink-0" aria-label="Notflix home">
+            <Image src="/logo.png" alt="Notflix" fill className="object-contain" priority />
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden xl:flex items-center gap-6">
-            <ul className="flex space-x-4">
-              <motion.li
-                custom={0}
-                variants={navItemVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 20,
-                }}
-              >
-                <motion.span
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  onClick={() => router.push("/")}
-                  className="cursor-pointer hover:text-primary transition-colors"
-                >
-                  Home
-                </motion.span>
-              </motion.li>
-              <motion.li
-                custom={1}
-                variants={navItemVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 20,
-                }}
-              >
-                <motion.span
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  onClick={() => router.push("/movies?sort=top_rated")}
-                  className="cursor-pointer hover:text-primary transition-colors"
-                >
-                  Top Rated Movies
-                </motion.span>
-              </motion.li>
-              <motion.li
-                custom={2}
-                variants={navItemVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 20,
-                }}
-              >
-                <motion.span
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                  onClick={() => router.push("/series?sort=top_rated")}
-                  className="cursor-pointer hover:text-primary transition-colors"
-                >
-                  Top Rated Shows
-                </motion.span>
-              </motion.li>
-              <motion.li
-                custom={3}
-                variants={navItemVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 20,
-                }}
-              >
-                <motion.div
-                  onHoverStart={() => setIsMoviesOpen(true)}
-                  onHoverEnd={() => setIsMoviesOpen(false)}
-                >
-                  <motion.span
-                    className="cursor-pointer flex items-center hover:text-primary transition-colors"
-                    onClick={() => router.push("/movies")}
-                  >
-                    Movies <ChevronDownIcon className="ml-1 h-4 w-4" />
-                  </motion.span>
-                  <AnimatePresence mode="wait">
-                    {isMoviesOpen && (
-                      <motion.div
-                        variants={dropdownVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="absolute left-0 mt-7 w-[600px] rounded-lg shadow-lg bg-background border"
-                        style={{
-                          transform: "translateX(40%)",
-                          right: "0",
-                          zIndex: 40,
-                        }}
-                      >
-                        <div className="p-4">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-3 px-2">
-                            Movie Genres
-                          </h3>
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
-                            {movieGenres.map((genre) => (
-                              <Link
-                                key={genre.id}
-                                href={`/movies?genreId=${genre.id}`}
-                                className="text-sm px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors w-full flex items-center group"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleGenreSelect(genre.id, "movie");
-                                }}
-                              >
-                                <span className="group-hover:translate-x-0.5 transition-transform">
-                                  {genre.name}
-                                </span>
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </motion.li>
-              <motion.li
-                custom={4}
-                variants={navItemVariants}
-                initial="hidden"
-                animate="visible"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 20,
-                }}
-              >
-                <motion.div
-                  onHoverStart={() => setIsSeriesOpen(true)}
-                  onHoverEnd={() => setIsSeriesOpen(false)}
-                >
-                  <motion.span
-                    className="cursor-pointer flex items-center hover:text-primary transition-colors"
-                    onClick={() => router.push("/series")}
-                  >
-                    Shows <ChevronDownIcon className="ml-1 h-4 w-4" />
-                  </motion.span>
-                  <AnimatePresence mode="wait">
-                    {isSeriesOpen && (
-                      <motion.div
-                        variants={dropdownVariants}
-                        initial="hidden"
-                        animate="visible"
-                        exit="exit"
-                        className="absolute left-0 mt-7 w-[600px] rounded-lg shadow-lg bg-background border"
-                        style={{
-                          transform: "translateX(40%)",
-                          right: "0",
-                          zIndex: 40,
-                        }}
-                      >
-                        <div className="p-4">
-                          <h3 className="text-sm font-medium text-muted-foreground mb-3 px-2">
-                            TV Show Genres
-                          </h3>
-                          <div className="grid grid-cols-3 gap-x-4 gap-y-1.5">
-                            {tvGenres.map((genre) => (
-                              <Link
-                                key={genre.id}
-                                href={`/series?genreId=${genre.id}`}
-                                className="text-sm px-2.5 py-1.5 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors w-full flex items-center group"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  handleGenreSelect(genre.id, "tv");
-                                }}
-                              >
-                                <span className="group-hover:translate-x-0.5 transition-transform">
-                                  {genre.name}
-                                </span>
-                              </Link>
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              </motion.li>
-            </ul>
-            <motion.form
-              variants={searchVariants}
-              initial="hidden"
-              animate="visible"
-              onSubmit={handleSearch}
-              className="flex space-x-2"
-            >
-              <Input
-                type="search"
-                placeholder="Search..."
-                className="w-[200px] md:w-[300px] transition-all duration-300 ease-in-out focus:w-[350px]"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{
-                  type: "spring",
-                  stiffness: 400,
-                  damping: 17,
-                }}
-              >
-                <Button type="submit" variant="outline" size="icon">
-                  <Search className="h-5 w-5" />
-                  <span className="sr-only">Search</span>
-                </Button>
-              </motion.div>
-            </motion.form>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3, delay: 0.6 }}
-            >
-              <ThemeToggle />
-            </motion.div>
+          <nav className="hidden md:flex items-center gap-7 text-base lg:text-lg">
+            {navLinks(false)}
           </nav>
 
-          {/* Mobile Controls */}
-          <div className="flex items-center gap-2 xl:hidden">
-            <ThemeToggle />
+          <div className="ml-auto flex items-center gap-1">
+            <SearchBox
+              trending={trending}
+              className="hidden md:block"
+              inputClassName="w-56 lg:w-72 transition-all duration-300 ease-in-out focus:lg:w-[350px]"
+            />
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="md:hidden"
+              onClick={() => setMobileSearchOpen((o) => !o)}
+              aria-label={mobileSearchOpen ? "Close search" : "Search"}
+              aria-expanded={mobileSearchOpen}
             >
-              {isMenuOpen ? (
-                <X className="h-6 w-6" />
-              ) : (
-                <Menu className="h-6 w-6" />
-              )}
+              {mobileSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
             </Button>
+            <ThemeToggle />
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        <AnimatePresence mode="wait">
-          {isMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{
-                opacity: 1,
-                height: "auto",
-                transition: {
-                  height: {
-                    duration: 0.3,
-                    ease: [0.4, 0, 0.2, 1],
-                  },
-                  opacity: {
-                    duration: 0.2,
-                    delay: 0.1,
-                  },
-                },
-              }}
-              exit={{
-                opacity: 0,
-                height: 0,
-                transition: {
-                  height: {
-                    duration: 0.2,
-                    ease: [0.4, 0, 0.2, 1],
-                  },
-                  opacity: {
-                    duration: 0.1,
-                  },
-                },
-              }}
-              className="xl:hidden overflow-hidden"
-            >
-              <nav className="py-4">
-                <ul className="space-y-4">
-                  <li>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => handleNavigation("/")}
-                    >
-                      Home
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => handleNavigation("/movies?sort=top_rated")}
-                    >
-                      Top Rated Movies
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => handleNavigation("/series?sort=top_rated")}
-                    >
-                      Top Rated Shows
-                    </Button>
-                  </li>
-                  <li>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => setIsMoviesOpen(!isMoviesOpen)}
-                    >
-                      Movies
-                      <ChevronDownIcon className="ml-2 h-4 w-4" />
-                    </Button>
-                    <AnimatePresence mode="wait">
-                      {isMoviesOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="pl-4 space-y-2 mt-2"
-                        >
-                          {movieGenres.map((genre) => (
-                            <Button
-                              key={genre.id}
-                              variant="ghost"
-                              className="w-full justify-start text-sm"
-                              onClick={() =>
-                                handleGenreSelect(genre.id, "movie")
-                              }
-                            >
-                              {genre.name}
-                            </Button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </li>
-                  <li>
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => setIsSeriesOpen(!isSeriesOpen)}
-                    >
-                      Shows
-                      <ChevronDownIcon className="ml-2 h-4 w-4" />
-                    </Button>
-                    <AnimatePresence mode="wait">
-                      {isSeriesOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="pl-4 space-y-2 mt-2"
-                        >
-                          {tvGenres.map((genre) => (
-                            <Button
-                              key={genre.id}
-                              variant="ghost"
-                              className="w-full justify-start text-sm"
-                              onClick={() => handleGenreSelect(genre.id, "tv")}
-                            >
-                              {genre.name}
-                            </Button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </li>
-                  <li>
-                    <form onSubmit={handleSearch} className="flex space-x-2">
-                      <Input
-                        type="search"
-                        placeholder="Search..."
-                        className="w-full"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                      <Button type="submit" variant="ghost" size="icon">
-                        <Search className="h-5 w-5" />
-                      </Button>
-                    </form>
-                  </li>
-                </ul>
-              </nav>
-            </motion.div>
+        {/* Mobile: search field or nav tabs */}
+        <div className="md:hidden pb-3">
+          {mobileSearchOpen ? (
+            <SearchBox trending={trending} autoFocus onNavigate={() => setMobileSearchOpen(false)} />
+          ) : (
+            <nav className="flex gap-7 text-base">{navLinks(true)}</nav>
           )}
-        </AnimatePresence>
+        </div>
       </div>
+
+      {/* Genre mega-menu (glass panel under the header) */}
+      <AnimatePresence>
+        {menu && (
+          <motion.div
+            key="genre-menu"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            onPointerEnter={(e) => e.pointerType === "mouse" && clearTimeout(closeTimer.current)}
+            onPointerLeave={(e) => e.pointerType === "mouse" && scheduleClose()}
+            // Same-page genre changes don't change the pathname, so close on any link click
+            onClick={(e) => (e.target as HTMLElement).closest("a") && setMenu(null)}
+            className="absolute inset-x-0 top-full border-b bg-background/85 backdrop-blur-md shadow-xl"
+          >
+            <div className="px-4 md:px-12 py-5 md:py-6 max-h-[70vh] overflow-y-auto">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                  {shown === "movie" ? "Movie" : "Series"} genres
+                </h3>
+                <div className="flex gap-4 text-sm">
+                  <Link href={base} className="font-medium hover:text-brand transition-colors">
+                    Popular
+                  </Link>
+                  <Link
+                    href={`${base}?sort=top_rated`}
+                    className="font-medium hover:text-brand transition-colors"
+                  >
+                    Top rated
+                  </Link>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1">
+                {genres.map((g) => (
+                  <Link
+                    key={g.id}
+                    href={`${base}?genreId=${g.id}`}
+                    className="group rounded-md px-3 py-2 text-sm hover:bg-secondary transition-colors"
+                  >
+                    <span className="inline-block transition-transform group-hover:translate-x-0.5 group-hover:text-brand">
+                      {g.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </header>
   );
 }

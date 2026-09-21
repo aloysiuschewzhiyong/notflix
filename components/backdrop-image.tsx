@@ -1,47 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 
 interface BackdropImageProps {
   src: string;
+  // Override the default banner height, e.g. a shorter one on player pages
+  className?: string;
 }
 
-export function BackdropImage({ src }: BackdropImageProps) {
-  const [scrollY, setScrollY] = useState(0);
+export function BackdropImage({
+  src,
+  className = "h-[45vh] md:h-[60vh]",
+}: BackdropImageProps) {
+  const layer = useRef<HTMLDivElement>(null);
 
+  // Parallax via a direct style write once per frame, instead of setState on
+  // every scroll event (which re-rendered the component dozens of times a second)
   useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (layer.current) {
+          layer.current.style.transform = `translate3d(0, ${window.scrollY * 0.3}px, 0)`;
+        }
+      });
     };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
   }, []);
 
   return (
-    <div className="relative w-full h-[60vh] overflow-hidden">
-      <div
-        className="absolute inset-0 h-[120%] -top-[20%]"
-        style={{ transform: `translateY(${scrollY * 0.3}px)` }}
-      >
-        <Image
-          unoptimized
-          src={src}
-          alt=""
-          fill
-          className="object-cover object-[50%_35%]"
-          priority
-        />
+    <div className={`relative w-full overflow-hidden ${className}`}>
+      <div ref={layer} className="absolute inset-0 h-[120%] -top-[20%] will-change-transform">
+        <Image src={src} alt="" fill sizes="100vw" className="object-cover object-[50%_35%]" priority />
       </div>
-      <div
-        className="absolute inset-0 bg-black/40"
-        style={{ transform: `translateY(${scrollY * 0.5}px)` }}
-      />
-      <div
-        className="absolute inset-0 bg-gradient-to-t from-background via-background/95 to-transparent"
-        style={{ transform: `translateY(${scrollY * 0.5}px)` }}
-      />
+      <div className="absolute inset-0 dark:bg-black/40" />
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
     </div>
   );
 }
