@@ -23,36 +23,44 @@ export function MoviePlayer({
     setIsPlaying(true);
   };
 
-  const getEmbedUrl = () => {
-    let baseUrl = "";
-    if (mediaType === "movie") {
-      baseUrl = `https://player.videasy.net/movie/${movieId}`;
-    } else if (mediaType === "tv") {
-      if (seasonNumber && episodeNumber) {
-        baseUrl = `https://player.videasy.net/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
-      } else if (seasonNumber) {
-        baseUrl = `https://player.videasy.net/tv/${movieId}/${seasonNumber}`;
-      } else {
-        baseUrl = `https://player.videasy.net/tv/${movieId}`;
-      }
+ const getEmbedUrl = () => {
+  let baseUrl = "";
+  if (mediaType === "movie") {
+    baseUrl = `https://vidfast.vc/movie/${movieId}`;
+  } else if (mediaType === "tv") {
+    if (seasonNumber && episodeNumber) {
+      baseUrl = `https://vidfast.vc/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
+    } else if (seasonNumber) {
+      baseUrl = `https://vidfast.vc/tv/${movieId}/${seasonNumber}`;
+    } else {
+      baseUrl = `https://vidfast.vc/tv/${movieId}`;
     }
+  }
 
-    if (!baseUrl) return "";
+  if (!baseUrl) return "";
 
-    const params = new URLSearchParams({
-      color: "E50914",
-      overlay: "true",
-    });
+  const params = new URLSearchParams({
+    title: "true",
+    poster: "true",
+    autoPlay: "false",
+    theme: "E50914",
+    hideServer: "false",
+    fullscreenButton: "true",
+    chromecast: "true",
+  });
 
-    if (mediaType === "tv") {
-      params.append("nextEpisode", "true");
-      params.append("autoplayNextEpisode", "true");
-      params.append("episodeSelector", "true");
-    }
+  // Optional parameters (uncomment/set as needed)
+  // params.append("startAt", "0");
+  // params.append("server", "");
+  // params.append("sub", "en");
 
-    return `${baseUrl}?${params.toString()}`;
-  };
+  if (mediaType === "tv") {
+    params.append("nextButton", "true");
+    params.append("autoNext", "true");
+  }
 
+  return `${baseUrl}?${params.toString()}`;
+};
   return (
     <div className="aspect-video bg-black rounded-lg overflow-hidden">
       {isPlaying ? (
