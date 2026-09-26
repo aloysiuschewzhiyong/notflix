@@ -16,7 +16,7 @@ interface Genre {
 }
 
 interface BrowseViewProps {
-  mediaType: "movie" | "tv";
+  mediaType: "movie" | "tv" | "anime";
   genres: Genre[];
   genreId?: number;
   sort?: string;
@@ -37,7 +37,7 @@ export function BrowseView({
   loadMore,
 }: BrowseViewProps) {
   const searchParams = useSearchParams();
-  const base = mediaType === "movie" ? "/movies" : "/series";
+  const base = mediaType === "movie" ? "/movies" : mediaType === "anime" ? "/anime" : "/series";
   const [filters, setFilters] = useState<GridFilters>(DEFAULT_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeChip = useRef<HTMLAnchorElement>(null);

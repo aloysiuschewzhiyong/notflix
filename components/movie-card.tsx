@@ -11,14 +11,20 @@ interface MediaItem {
   id: number;
   title?: string;
   name?: string;
-  poster_path: string;
+  poster_path: string | null;
   vote_average?: number | string;
-  media_type?: "movie" | "tv";
+  media_type?: "movie" | "tv" | "anime";
   release_date?: string;
   first_air_date?: string;
   original_language?: string;
   content_rating?: string;
 }
+
+const BADGE_LABEL: Record<"movie" | "tv" | "anime", string> = {
+  movie: "Movie",
+  tv: "Series",
+  anime: "Anime",
+};
 
 interface MovieCardProps {
   movie: MediaItem;
@@ -51,7 +57,11 @@ export function MovieCard({ movie }: MovieCardProps) {
         <div className="relative aspect-[2/3] overflow-hidden rounded-xl bg-muted shadow-md ring-1 ring-black/5 dark:ring-white/10 transition-shadow duration-200 group-hover:shadow-glow">
           {movie.poster_path && (
             <Image
-              src={`https://image.tmdb.org/t/p/w342${movie.poster_path}`}
+              src={
+                movie.poster_path.startsWith("http")
+                  ? movie.poster_path
+                  : `https://image.tmdb.org/t/p/w342${movie.poster_path}`
+              }
               alt={title}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
@@ -66,7 +76,7 @@ export function MovieCard({ movie }: MovieCardProps) {
 
           {/* Glass badges */}
           <span className="absolute top-2 left-2 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] sm:text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
-            {mediaType === "movie" ? "Movie" : "Series"}
+            {BADGE_LABEL[mediaType]}
           </span>
           {rating > 0 && (
             <span className="absolute top-2 right-2 flex items-center gap-1 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-xs font-medium text-white">

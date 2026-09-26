@@ -17,7 +17,7 @@ export function BrowseHero({ eyebrow, title, subtitle, items }: BrowseHeroProps)
       {backdrop && (
         <div aria-hidden className="absolute inset-0">
           <Image
-            src={`https://image.tmdb.org/t/p/w1280${backdrop}`}
+            src={backdrop.startsWith("http") ? backdrop : `https://image.tmdb.org/t/p/w1280${backdrop}`}
             alt=""
             fill
             priority
@@ -57,7 +57,11 @@ export function BrowseHero({ eyebrow, title, subtitle, items }: BrowseHeroProps)
                   }}
                 >
                   <Image
-                    src={`https://image.tmdb.org/t/p/w185${p.poster_path}`}
+                    src={
+                      p.poster_path!.startsWith("http")
+                        ? p.poster_path!
+                        : `https://image.tmdb.org/t/p/w185${p.poster_path}`
+                    }
                     alt=""
                     fill
                     sizes="96px"

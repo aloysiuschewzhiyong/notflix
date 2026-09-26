@@ -1,8 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { HlsPlayer, type StreamResult } from "@/components/hls-player";
 
 interface MoviePlayerProps {
   movieId: string;
@@ -17,73 +15,28 @@ export function MoviePlayer({
   seasonNumber,
   episodeNumber,
 }: MoviePlayerProps) {
-  const [isPlaying, setIsPlaying] = useState(false);
+  const fetchStream = async (): Promise<StreamResult> => {
+    const params = new URLSearchParams({ tmdbId: movieId, mediaType });
+    if (mediaType === "tv" && seasonNumber && episodeNumber) {
+      params.set("season", String(seasonNumber));
+      params.set("episode", String(episodeNumber));
+    }
 
-  const handlePlayClick = () => {
-    setIsPlaying(true);
+    const response = await fetch(`/api/stream/vidfast?${params.toString()}`);
+    const data = await response.json();
+
+    if (!response.ok || !data.url) {
+      throw new Error(data.error || "Failed to fetch stream");
+    }
+
+    return { url: data.url, referer: data.referer };
   };
 
- const getEmbedUrl = () => {
-  let baseUrl = "";
-  if (mediaType === "movie") {
-    baseUrl = `https://vidfast.vc/movie/${movieId}`;
-  } else if (mediaType === "tv") {
-    if (seasonNumber && episodeNumber) {
-      baseUrl = `https://vidfast.vc/tv/${movieId}/${seasonNumber}/${episodeNumber}`;
-    } else if (seasonNumber) {
-      baseUrl = `https://vidfast.vc/tv/${movieId}/${seasonNumber}`;
-    } else {
-      baseUrl = `https://vidfast.vc/tv/${movieId}`;
-    }
-  }
-
-  if (!baseUrl) return "";
-
-  const params = new URLSearchParams({
-    title: "true",
-    poster: "true",
-    autoPlay: "false",
-    theme: "E50914",
-    hideServer: "false",
-    fullscreenButton: "true",
-    chromecast: "true",
-  });
-
-  // Optional parameters (uncomment/set as needed)
-  // params.append("startAt", "0");
-  // params.append("server", "");
-  // params.append("sub", "en");
-
-  if (mediaType === "tv") {
-    params.append("nextButton", "true");
-    params.append("autoNext", "true");
-  }
-
-  return `${baseUrl}?${params.toString()}`;
-};
   return (
-    <div className="aspect-video bg-black rounded-lg overflow-hidden">
-      {isPlaying ? (
-        <iframe
-          src={getEmbedUrl()}
-          width="100%"
-          height="100%"
-          frameBorder="0"
-          allowFullScreen
-          {...({ webkitallowfullscreen: "true", mozallowfullscreen: "true" } as any)}
-          allow="encrypted-media"
-          className="w-full h-full"
-          style={{ border: "none" }}
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-            <Button onClick={handlePlayClick} size="lg" variant="secondary">
-              Play {mediaType === "movie" ? "Movie" : "Episode"}
-            </Button>
-          </motion.div>
-        </div>
-      )}
-    </div>
+    <HlsPlayer
+      key={`${movieId}-${mediaType}-${seasonNumber}-${episodeNumber}`}
+      label={mediaType === "movie" ? "Movie" : "Episode"}
+      fetchStream={fetchStream}
+    />
   );
 }

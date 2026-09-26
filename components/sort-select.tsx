@@ -17,9 +17,14 @@ export function SortSelect({ className }: { className?: string }) {
   const pathname = usePathname();
   const currentSort = searchParams.get("sort") ?? "popular";
 
-  // Determine if we're on the movies or series page
-  const mediaType = pathname.includes("/movies") ? "movie" : "tv";
+  // Determine which browse page we're on
+  const mediaType = pathname.includes("/movies")
+    ? "movie"
+    : pathname.includes("/anime")
+    ? "anime"
+    : "tv";
   const options = SORT_OPTIONS[mediaType as keyof typeof SORT_OPTIONS];
+  const base = mediaType === "movie" ? "movies" : mediaType === "anime" ? "anime" : "series";
 
   const handleSortChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -31,11 +36,7 @@ export function SortSelect({ className }: { className?: string }) {
     }
 
     // Keep the genre parameter if it exists
-    router.push(
-      `/${mediaType === "movie" ? "movies" : "series"}${
-        params.toString() ? `?${params.toString()}` : ""
-      }`
-    );
+    router.push(`/${base}${params.toString() ? `?${params.toString()}` : ""}`);
   };
 
   return (

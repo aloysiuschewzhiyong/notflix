@@ -5,6 +5,7 @@ import Footer from "@/components/footer";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { getMovieGenres, getTVGenres, getMediaList } from "@/utils/tmdb";
+import { getAnimeGenres } from "@/utils/anilist";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,12 +17,13 @@ export const metadata = {
 // Header data is non-critical: fall back to empty lists if TMDB is unreachable
 async function getHeaderData() {
   const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
-  const [movieGenres, tvGenres, trending] = await Promise.all([
+  const [movieGenres, tvGenres, animeGenres, trending] = await Promise.all([
     safe(getMovieGenres(), []),
     safe(getTVGenres(), []),
+    safe(getAnimeGenres(), []),
     getMediaList("/trending/all/day"),
   ]);
-  return { movieGenres, tvGenres, trending: trending.slice(0, 6) };
+  return { movieGenres, tvGenres, animeGenres, trending: trending.slice(0, 6) };
 }
 
 export default async function RootLayout({

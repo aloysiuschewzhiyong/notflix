@@ -8,6 +8,11 @@ const nextConfig = {
                 hostname: 'image.tmdb.org',
                 pathname: '/t/p/**',
             },
+            {
+                protocol: 'https',
+                hostname: 's4.anilist.co',
+                pathname: '/**',
+            },
         ],
     },
 };

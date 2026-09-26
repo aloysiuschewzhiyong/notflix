@@ -20,4 +20,14 @@ export const SORT_OPTIONS = {
     { value: "name.asc", label: "Title A-Z" },
     { value: "name.desc", label: "Title Z-A" },
   ],
-} as const; 
+  anime: [
+    { value: "popular", label: "Popular" },
+    { value: "trending", label: "Trending" },
+    { value: "top_rated", label: "Top Rated" },
+    { value: "start_date.desc", label: "Latest Release" },
+    { value: "start_date.asc", label: "Oldest Release" },
+    { value: "title.asc", label: "Title A-Z" },
+    { value: "title.desc", label: "Title Z-A" },
+    { value: "favourites.desc", label: "Most Favourited" },
+  ],
+} as const;

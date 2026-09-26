@@ -17,13 +17,26 @@ interface Genre {
   name: string;
 }
 
-type MenuKey = "movie" | "tv";
+type MenuKey = "movie" | "tv" | "anime";
 
 interface HeaderProps {
   movieGenres: Genre[];
   tvGenres: Genre[];
+  animeGenres: Genre[];
   trending: MediaListItem[];
 }
+
+const MENU_LABEL: Record<MenuKey, string> = {
+  movie: "Movie",
+  tv: "Series",
+  anime: "Anime",
+};
+
+const MENU_BASE: Record<MenuKey, string> = {
+  movie: "/movies",
+  tv: "/series",
+  anime: "/anime",
+};
 
 // Springy hover/tap from the original header
 const navMotion = {
@@ -51,11 +64,17 @@ const NAV_ITEMS: {
     menu: "tv",
     match: (p) => p.startsWith("/series") || p.startsWith("/tv/"),
   },
+  {
+    label: "Anime",
+    href: "/anime",
+    menu: "anime",
+    match: (p) => p.startsWith("/anime"),
+  },
 ];
 
 const MENU_CLOSE_DELAY = 150;
 
-export default function Header({ movieGenres, tvGenres, trending }: HeaderProps) {
+export default function Header({ movieGenres, tvGenres, animeGenres, trending }: HeaderProps) {
   const pathname = usePathname();
   const lastMenu = useRef<MenuKey>("movie");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -156,8 +175,8 @@ export default function Header({ movieGenres, tvGenres, trending }: HeaderProps)
   // Keep showing the last menu's content while the panel animates out
   if (menu) lastMenu.current = menu;
   const shown = lastMenu.current;
-  const genres = shown === "movie" ? movieGenres : tvGenres;
-  const base = shown === "movie" ? "/movies" : "/series";
+  const genres = shown === "movie" ? movieGenres : shown === "anime" ? animeGenres : tvGenres;
+  const base = MENU_BASE[shown];
 
   return (
     <header
@@ -225,7 +244,7 @@ export default function Header({ movieGenres, tvGenres, trending }: HeaderProps)
             <div className="px-4 md:px-12 py-5 md:py-6 max-h-[70vh] overflow-y-auto">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                  {shown === "movie" ? "Movie" : "Series"} genres
+                  {MENU_LABEL[shown]} genres
                 </h3>
                 <div className="flex gap-4 text-sm">
                   <Link href={base} className="font-medium hover:text-brand transition-colors">

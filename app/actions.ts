@@ -1,6 +1,7 @@
 "use server";
 
 import { getMoviesByGenreAndSort, getTVShowsByGenreAndSort } from "@/utils/tmdb";
+import { getAnimeByGenreAndSort } from "@/utils/anilist";
 
 export async function loadMoreMovies(
   page: number,
@@ -47,6 +48,22 @@ export async function loadMoreTVShows(
     );
   } catch (error) {
     console.error("Error loading more TV shows:", error);
+    return [];
+  }
+}
+
+export async function loadMoreAnime(page: number, genreId?: number, sort?: string) {
+  try {
+    const response = await getAnimeByGenreAndSort(genreId || 0, sort || "popular", page);
+
+    return (
+      response?.results?.map((anime, index) => ({
+        ...anime,
+        index: index + (page - 1) * 20,
+      })) || []
+    );
+  } catch (error) {
+    console.error("Error loading more anime:", error);
     return [];
   }
 }
