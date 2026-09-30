@@ -34,7 +34,7 @@ export function AnimePlayer({
       throw new Error(data.error || "Failed to fetch stream");
     }
 
-    return { url: data.url, referer: data.referer };
+    return { url: data.url, referer: data.referer, subtitles: data.subtitles };
   };
 
   return (

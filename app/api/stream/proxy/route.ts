@@ -12,6 +12,33 @@ function isPlaylist(url: string, contentType: string) {
   );
 }
 
+function isSubtitle(url: string, contentType: string) {
+  return (
+    /\.(vtt|srt)(\?|$)/i.test(url) ||
+    contentType.includes("vtt") ||
+    contentType.includes("x-subrip") ||
+    contentType.includes("srt")
+  );
+}
+
+// The <track> element only understands WebVTT, but these sources sometimes
+// hand out .srt - convert on the fly instead of dropping the track.
+function srtToVtt(srt: string): string {
+  const body = srt
+    .replace(/\r+/g, "")
+    .replace(/^\d+\n(?=\d{2}:\d{2}:\d{2})/gm, "")
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, "$1.$2");
+  return `WEBVTT\n\n${body}`;
+}
+
+// Wyzie's free tier injects a "you're on the free plan" promo cue into every
+// file - strip any cue block that mentions it rather than showing it as if
+// it were part of the actual subtitles.
+function stripPromoCues(vtt: string): string {
+  const [header, ...blocks] = vtt.split(/\n\n+/);
+  return [header, ...blocks.filter((b) => !b.toLowerCase().includes("wyzie.io"))].join("\n\n");
+}
+
 function rewritePlaylist(text: string, baseUrl: string, proxyBase: string, referer: string) {
   const toProxyUrl = (raw: string) => {
     const abs = raw.startsWith("http") ? raw : new URL(raw, baseUrl).toString();
@@ -24,11 +51,15 @@ function rewritePlaylist(text: string, baseUrl: string, proxyBase: string, refer
       const trimmed = line.trim();
       if (!trimmed) return line;
 
-      if (trimmed.startsWith("#EXT-X-KEY") || trimmed.startsWith("#EXT-X-MAP")) {
-        return trimmed.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toProxyUrl(uri)}"`);
+      if (trimmed.startsWith("#")) {
+        // Rewrite any URI="..." attribute: covers EXT-X-KEY, EXT-X-MAP, and
+        // EXT-X-MEDIA (how HLS embeds subtitle/audio renditions) alike, so
+        // subtitle playlists get the same Referer treatment as video segments.
+        if (/URI="[^"]+"/.test(trimmed)) {
+          return trimmed.replace(/URI="([^"]+)"/, (_, uri) => `URI="${toProxyUrl(uri)}"`);
+        }
+        return line;
       }
-
-      if (trimmed.startsWith("#")) return line;
 
       return toProxyUrl(trimmed);
     })
@@ -71,6 +102,18 @@ export async function GET(request: NextRequest) {
         headers: {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "no-cache",
+        },
+      });
+    }
+
+    if (isSubtitle(target, contentType)) {
+      const text = await upstream.text();
+      const vtt = /\.srt(\?|$)/i.test(target) || contentType.includes("srt") ? srtToVtt(text) : text;
+
+      return new NextResponse(stripPromoCues(vtt), {
+        headers: {
+          "Content-Type": "text/vtt; charset=utf-8",
+          "Cache-Control": "public, max-age=3600",
         },
       });
     }

@@ -27,3 +27,50 @@ export function findStreamUrl(value: unknown): string | null {
   }
   return null;
 }
+
+export interface SubtitleTrack {
+  url: string;
+  label: string;
+  lang?: string;
+  default?: boolean;
+}
+
+// Field names these providers use for a subtitle/caption track list.
+const SUBTITLE_ARRAY_KEYS = ["tracks", "captions", "subtitles", "subs"];
+
+function normalizeSubtitle(item: unknown): SubtitleTrack | null {
+  if (!item || typeof item !== "object") return null;
+  const obj = item as Record<string, unknown>;
+  const url = obj.file || obj.url || obj.src;
+  if (typeof url !== "string" || !url) return null;
+  const lang = typeof obj.lang === "string" ? obj.lang : typeof obj.language === "string" ? obj.language : undefined;
+  const label = typeof obj.label === "string" ? obj.label : lang || "Subtitle";
+  return { url, label, lang, default: obj.default === true };
+}
+
+// Recursively search a decrypted payload for a subtitle/caption track list,
+// trying known field names first before scanning every array in the payload.
+export function findSubtitles(value: unknown, depth = 0): SubtitleTrack[] {
+  if (depth > 6 || !value || typeof value !== "object") return [];
+
+  if (Array.isArray(value)) {
+    const normalized = value.map(normalizeSubtitle).filter((t): t is SubtitleTrack => t !== null);
+    if (normalized.length > 0 && normalized.length === value.length) return normalized;
+    return value.flatMap((v) => findSubtitles(v, depth + 1));
+  }
+
+  const obj = value as Record<string, unknown>;
+  for (const key of SUBTITLE_ARRAY_KEYS) {
+    if (Array.isArray(obj[key])) {
+      const normalized = (obj[key] as unknown[])
+        .map(normalizeSubtitle)
+        .filter((t): t is SubtitleTrack => t !== null);
+      if (normalized.length > 0) return normalized;
+    }
+  }
+  for (const key of Object.keys(obj)) {
+    const found = findSubtitles(obj[key], depth + 1);
+    if (found.length > 0) return found;
+  }
+  return [];
+}

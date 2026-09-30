@@ -5,12 +5,14 @@ import Hls from "hls.js";
 import { AnimatePresence, motion } from "framer-motion";
 import { Play, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { SubtitleTrack } from "@/lib/stream-utils";
 
 type PlayerState = "idle" | "fetching" | "buffering" | "playing" | "error";
 
 export interface StreamResult {
   url: string;
   referer?: string;
+  subtitles?: SubtitleTrack[];
 }
 
 interface HlsPlayerProps {
@@ -21,25 +23,33 @@ interface HlsPlayerProps {
 export function HlsPlayer({ label, fetchStream }: HlsPlayerProps) {
   const [state, setState] = useState<PlayerState>("idle");
   const [streamUrl, setStreamUrl] = useState("");
+  const [subtitles, setSubtitles] = useState<SubtitleTrack[]>([]);
   const [error, setError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+
+  const proxied = useCallback((url: string, referer?: string) => {
+    const params = new URLSearchParams({ url });
+    if (referer) params.set("ref", referer);
+    return `/api/stream/proxy?${params.toString()}`;
+  }, []);
 
   const start = useCallback(async () => {
     setState("fetching");
     setError("");
     setStreamUrl("");
+    setSubtitles([]);
     try {
-      const { url, referer } = await fetchStream();
-      const params = new URLSearchParams({ url });
-      if (referer) params.set("ref", referer);
-      setStreamUrl(`/api/stream/proxy?${params.toString()}`);
+      const { url, referer, subtitles: tracks } = await fetchStream();
+      // Subtitle files live on the same CDNs and need the same Referer treatment.
+      setSubtitles((tracks || []).map((t) => ({ ...t, url: proxied(t.url, referer) })));
+      setStreamUrl(proxied(url, referer));
       setState("buffering");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch stream");
       setState("error");
     }
-  }, [fetchStream]);
+  }, [fetchStream, proxied]);
 
   useEffect(() => {
     if (!streamUrl || !videoRef.current) return;
@@ -145,9 +155,21 @@ export function HlsPlayer({ label, fetchStream }: HlsPlayerProps) {
         controls
         autoPlay
         playsInline
+        crossOrigin="anonymous"
         className="h-full w-full bg-black"
         style={{ display: state === "playing" || state === "buffering" ? "block" : "none" }}
-      />
+      >
+        {subtitles.map((track, i) => (
+          <track
+            key={`${track.lang || track.label}-${i}`}
+            kind="subtitles"
+            src={track.url}
+            srcLang={track.lang || "en"}
+            label={track.label}
+            default={track.default === true}
+          />
+        ))}
+      </video>
 
       {state === "buffering" && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40">

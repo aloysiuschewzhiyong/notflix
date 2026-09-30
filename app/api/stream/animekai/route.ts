@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findStreamUrl } from "@/lib/stream-utils";
+import { findStreamUrl, findSubtitles, type SubtitleTrack } from "@/lib/stream-utils";
 
 const ENC_DEC_API = "https://enc-dec.app/api";
 const KAI_DB = "https://enc-dec.app/db/kai";
@@ -33,7 +33,10 @@ interface KaiEntry {
 
 // Decrypts a megaup/rapidshare-style "/media/" JSON response using whichever
 // enc-dec.app endpoint matches the hosting domain.
-async function decryptHosterMedia(mediaUrl: string, referer: string): Promise<string | null> {
+async function decryptHosterMedia(
+  mediaUrl: string,
+  referer: string
+): Promise<{ url: string; subtitles: SubtitleTrack[] } | null> {
   const mediaResp = await fetch(mediaUrl, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/json", Referer: referer },
   });
@@ -48,7 +51,9 @@ async function decryptHosterMedia(mediaUrl: string, referer: string): Promise<st
     body: JSON.stringify({ text: mediaJson.result, agent: USER_AGENT }),
   });
   const decrypted = await validate<unknown>(decResp, decEndpoint);
-  return findStreamUrl(decrypted);
+  const url = findStreamUrl(decrypted);
+  if (!url) return null;
+  return { url, subtitles: findSubtitles(decrypted) };
 }
 
 // Fast path: the kai database ships pre-scraped megaup paths per episode, so
@@ -59,7 +64,7 @@ async function tryDatabasePath(
   episode: string,
   preferredAudio: string,
   trace: string[]
-): Promise<{ url: string; referer: string } | null> {
+): Promise<{ url: string; referer: string; subtitles: SubtitleTrack[] } | null> {
   const episodeData = entry.episodes?.[season]?.[episode];
   const megaupMirrors = entry.info?.mirrors?.megaup || [];
   if (!episodeData) {
@@ -85,8 +90,8 @@ async function tryDatabasePath(
 
       for (const mirror of megaupMirrors) {
         try {
-          const url = await decryptHosterMedia(`${mirror}${path}`, mirror);
-          if (url) return { url, referer: mirror };
+          const result = await decryptHosterMedia(`${mirror}${path}`, mirror);
+          if (result) return { ...result, referer: mirror };
           trace.push(`fast: ${mirror} (${track}/${serverKey}) decrypted to no URL`);
         } catch (err) {
           trace.push(
@@ -110,7 +115,7 @@ async function tryLiveScrape(
   episode: string,
   preferredAudio: string,
   trace: string[]
-): Promise<{ url: string; referer: string } | null> {
+): Promise<{ url: string; referer: string; subtitles: SubtitleTrack[] } | null> {
   const watchPath = entry.info?.kai_watch;
   const animekaiMirrors = entry.info?.mirrors?.animekai || [];
   if (!watchPath) {
@@ -232,8 +237,8 @@ async function tryLiveScrape(
             // 5. Resolve the embed to a /media/ url and decrypt via the matching hoster.
             const hosterReferer = embedUrl.split("/e/")[0] + "/";
             const mediaUrl = embedUrl.replace("/e/", "/media/");
-            const url = await decryptHosterMedia(mediaUrl, hosterReferer);
-            if (url) return { url, referer: hosterReferer };
+            const result = await decryptHosterMedia(mediaUrl, hosterReferer);
+            if (result) return { ...result, referer: hosterReferer };
             trace.push(`live: ${site} (${track}/${serverId}) decrypted to no URL`);
           } catch (err) {
             trace.push(

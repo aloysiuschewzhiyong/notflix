@@ -22,14 +22,14 @@ export function MoviePlayer({
       params.set("episode", String(episodeNumber));
     }
 
-    const response = await fetch(`/api/stream/vidfast?${params.toString()}`);
+    const response = await fetch(`/api/stream/movie?${params.toString()}`);
     const data = await response.json();
 
     if (!response.ok || !data.url) {
       throw new Error(data.error || "Failed to fetch stream");
     }
 
-    return { url: data.url, referer: data.referer };
+    return { url: data.url, referer: data.referer, subtitles: data.subtitles };
   };
 
   return (

@@ -118,7 +118,7 @@ export async function getMovieDetails(movieId: string) {
 
 export async function getTVShowDetails(tvShowId: string) {
   const response = await cachedFetch(
-    `https://api.themoviedb.org/3/tv/${tvShowId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits,content_ratings`
+    `https://api.themoviedb.org/3/tv/${tvShowId}?api_key=${process.env.TMDB_API_KEY}&append_to_response=credits,content_ratings,external_ids`
   );
   const data = await response.json();
   const contentRating = await getTVShowContentRating(Number(tvShowId));
