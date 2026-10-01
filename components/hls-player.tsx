@@ -161,8 +161,22 @@ export function HlsPlayer({ label, fetchStream }: HlsPlayerProps) {
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(document.fullscreenElement === containerRef.current);
     document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
-  }, []);
+
+    // iOS Safari has no Fullscreen API on arbitrary elements - only
+    // webkitEnterFullscreen() on <video>, which reports state via these
+    // events on the video itself instead of document.fullscreenchange.
+    const video = videoRef.current;
+    const onIosBegin = () => setIsFullscreen(true);
+    const onIosEnd = () => setIsFullscreen(false);
+    video?.addEventListener("webkitbeginfullscreen", onIosBegin);
+    video?.addEventListener("webkitendfullscreen", onIosEnd);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      video?.removeEventListener("webkitbeginfullscreen", onIosBegin);
+      video?.removeEventListener("webkitendfullscreen", onIosEnd);
+    };
+  }, [streamUrl]);
 
   // Auto-hide the control bar a couple seconds after the last interaction
   const scheduleHide = useCallback(() => {
@@ -242,7 +256,22 @@ export function HlsPlayer({ label, fetchStream }: HlsPlayerProps) {
 
   const toggleFullscreen = () => {
     const el = containerRef.current;
-    if (!el) return;
+    const video = videoRef.current as
+      | (HTMLVideoElement & {
+          webkitEnterFullscreen?: () => void;
+          webkitExitFullscreen?: () => void;
+          webkitDisplayingFullscreen?: boolean;
+        })
+      | null;
+    if (!el || !video) return;
+
+    // iOS Safari only supports fullscreen on the <video> element itself.
+    if (typeof el.requestFullscreen !== "function" && video.webkitEnterFullscreen) {
+      if (video.webkitDisplayingFullscreen) video.webkitExitFullscreen?.();
+      else video.webkitEnterFullscreen();
+      return;
+    }
+
     if (document.fullscreenElement) document.exitFullscreen();
     else el.requestFullscreen?.().catch(() => {});
   };
