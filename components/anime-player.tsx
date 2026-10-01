@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { HlsPlayer, type StreamResult } from "@/components/hls-player";
+import { readNdjsonStream } from "@/lib/ndjson-stream";
 import { cn } from "@/lib/utils";
 
 interface AnimePlayerProps {
@@ -19,7 +20,7 @@ export function AnimePlayer({
 }: AnimePlayerProps) {
   const [audio, setAudio] = useState<(typeof AUDIO_TRACKS)[number]>("sub");
 
-  const fetchStream = async (): Promise<StreamResult> => {
+  const fetchStream = async (onStatus: (message: string) => void): Promise<StreamResult> => {
     const params = new URLSearchParams({
       anilistId: String(anilistId),
       season: String(seasonNumber),
@@ -28,11 +29,10 @@ export function AnimePlayer({
     });
 
     const response = await fetch(`/api/stream/animekai?${params.toString()}`);
-    const data = await response.json();
-
-    if (!response.ok || !data.url) {
-      throw new Error(data.error || "Failed to fetch stream");
-    }
+    const data = await readNdjsonStream<{ url: string; referer?: string; subtitles?: StreamResult["subtitles"] }>(
+      response,
+      onStatus
+    );
 
     return { url: data.url, referer: data.referer, subtitles: data.subtitles };
   };

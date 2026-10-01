@@ -1,4 +1,5 @@
 import { findStreamUrl, findSubtitles, type SubtitleTrack } from "@/lib/stream-utils";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 // vidfast, vidcore and vidup all share the exact same page-scrape + token
 // dance (see samples/vidfast.py, vidcore.py, vidup.py in the EncDecEndpoints
@@ -52,7 +53,7 @@ export async function fetchTokenFamilyStream(
   };
 
   try {
-    const pageResp = await fetch(baseUrl, { headers: { "User-Agent": USER_AGENT } });
+    const pageResp = await fetchWithTimeout(baseUrl, { headers: { "User-Agent": USER_AGENT } });
     if (!pageResp.ok) {
       trace.push(`${source.name}: page fetch returned ${pageResp.status}`);
       return null;
@@ -65,7 +66,7 @@ export async function fetchTokenFamilyStream(
     }
     const extractedText = match[1];
 
-    const encResp = await fetch(
+    const encResp = await fetchWithTimeout(
       `${ENC_DEC_API}/enc-${source.slug}?text=${encodeURIComponent(extractedText)}`
     );
     const encData = await validate<{ servers: string; stream: string; token: string }>(
@@ -74,13 +75,13 @@ export async function fetchTokenFamilyStream(
     );
     const { servers, stream, token } = encData;
 
-    const serversResp = await fetch(servers, {
+    const serversResp = await fetchWithTimeout(servers, {
       method: "POST",
       headers: { ...headers, "X-CSRF-Token": token },
     });
     const serversEncrypted = await serversResp.text();
 
-    const decServersResp = await fetch(`${ENC_DEC_API}/dec-${source.slug}`, {
+    const decServersResp = await fetchWithTimeout(`${ENC_DEC_API}/dec-${source.slug}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: serversEncrypted }),
@@ -98,13 +99,13 @@ export async function fetchTokenFamilyStream(
     for (const server of serversDecrypted) {
       try {
         const streamUrl = `${stream}/${server.data}`;
-        const streamResp = await fetch(streamUrl, {
+        const streamResp = await fetchWithTimeout(streamUrl, {
           method: "POST",
           headers: { ...headers, "X-CSRF-Token": token },
         });
         const streamEncrypted = await streamResp.text();
 
-        const decStreamResp = await fetch(`${ENC_DEC_API}/dec-${source.slug}`, {
+        const decStreamResp = await fetchWithTimeout(`${ENC_DEC_API}/dec-${source.slug}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: streamEncrypted }),

@@ -1,4 +1,5 @@
 import type { SubtitleTrack } from "@/lib/stream-utils";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 // Wyzie Subs (sub.wyzie.io): a purpose-built subtitle search API. The video
 // decrypt sources (vidfast/cinejoy/etc.) don't carry subtitle data themselves,
@@ -37,7 +38,7 @@ export async function fetchWyzieSubtitles(lookup: WyzieLookup): Promise<Subtitle
   }
 
   try {
-    const resp = await fetch(`${WYZIE_API}/search?${params.toString()}`);
+    const resp = await fetchWithTimeout(`${WYZIE_API}/search?${params.toString()}`);
     if (!resp.ok) return [];
     const results: WyzieResult[] = await resp.json();
     if (!Array.isArray(results)) return [];

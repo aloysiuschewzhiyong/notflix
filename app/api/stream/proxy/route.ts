@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 const DEFAULT_REFERER = "https://vidfast.vc/";
 const USER_AGENT =
@@ -76,12 +77,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(target, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        Referer: referer,
+    // Segments can be a few MB, so this gets more headroom than the
+    // source-resolving API calls.
+    const upstream = await fetchWithTimeout(
+      target,
+      {
+        headers: {
+          "User-Agent": USER_AGENT,
+          Referer: referer,
+        },
       },
-    });
+      15000
+    );
 
     if (!upstream.ok) {
       return NextResponse.json(

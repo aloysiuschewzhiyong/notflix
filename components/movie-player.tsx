@@ -1,6 +1,7 @@
 "use client";
 
 import { HlsPlayer, type StreamResult } from "@/components/hls-player";
+import { readNdjsonStream } from "@/lib/ndjson-stream";
 
 interface MoviePlayerProps {
   movieId: string;
@@ -15,7 +16,7 @@ export function MoviePlayer({
   seasonNumber,
   episodeNumber,
 }: MoviePlayerProps) {
-  const fetchStream = async (): Promise<StreamResult> => {
+  const fetchStream = async (onStatus: (message: string) => void): Promise<StreamResult> => {
     const params = new URLSearchParams({ tmdbId: movieId, mediaType });
     if (mediaType === "tv" && seasonNumber && episodeNumber) {
       params.set("season", String(seasonNumber));
@@ -23,11 +24,10 @@ export function MoviePlayer({
     }
 
     const response = await fetch(`/api/stream/movie?${params.toString()}`);
-    const data = await response.json();
-
-    if (!response.ok || !data.url) {
-      throw new Error(data.error || "Failed to fetch stream");
-    }
+    const data = await readNdjsonStream<{ url: string; referer?: string; subtitles?: StreamResult["subtitles"] }>(
+      response,
+      onStatus
+    );
 
     return { url: data.url, referer: data.referer, subtitles: data.subtitles };
   };

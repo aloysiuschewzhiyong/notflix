@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { ndjsonResponse } from "@/lib/ndjson-stream";
 import { findStreamUrl, findSubtitles, type SubtitleTrack } from "@/lib/stream-utils";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 const ENC_DEC_API = "https://enc-dec.app/api";
 const KAI_DB = "https://enc-dec.app/db/kai";
@@ -31,13 +32,37 @@ interface KaiEntry {
   >;
 }
 
+// The kai database ships a per-title mirror list that can go stale (these
+// domains rotate often). Supplement it with the domains the EncDecEndpoints
+// README currently documents instead of trusting the cache alone.
+const CURRENT_ANIMEKAI_MIRRORS = ["https://animekai.to/", "https://anikai.to/"];
+const CURRENT_MEGAUP_MIRRORS = [
+  "https://megaup.site/",
+  "https://megaup.live/",
+  "https://4spromax.site/",
+];
+
+function mergeMirrors(cached: string[] | undefined, current: string[]): string[] {
+  const normalize = (u: string) => (u.endsWith("/") ? u : `${u}/`);
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const url of [...(cached || []), ...current]) {
+    const n = normalize(url);
+    if (!seen.has(n)) {
+      seen.add(n);
+      merged.push(n);
+    }
+  }
+  return merged;
+}
+
 // Decrypts a megaup/rapidshare-style "/media/" JSON response using whichever
 // enc-dec.app endpoint matches the hosting domain.
 async function decryptHosterMedia(
   mediaUrl: string,
   referer: string
 ): Promise<{ url: string; subtitles: SubtitleTrack[] } | null> {
-  const mediaResp = await fetch(mediaUrl, {
+  const mediaResp = await fetchWithTimeout(mediaUrl, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/json", Referer: referer },
   });
   if (!mediaResp.ok) throw new Error(`Hoster returned ${mediaResp.status}`);
@@ -45,7 +70,7 @@ async function decryptHosterMedia(
   if (!mediaJson.result) throw new Error("No encrypted payload from hoster");
 
   const decEndpoint = mediaUrl.includes("rapidshare") ? "dec-rapid" : "dec-mega";
-  const decResp = await fetch(`${ENC_DEC_API}/${decEndpoint}`, {
+  const decResp = await fetchWithTimeout(`${ENC_DEC_API}/${decEndpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text: mediaJson.result, agent: USER_AGENT }),
@@ -66,7 +91,7 @@ async function tryDatabasePath(
   trace: string[]
 ): Promise<{ url: string; referer: string; subtitles: SubtitleTrack[] } | null> {
   const episodeData = entry.episodes?.[season]?.[episode];
-  const megaupMirrors = entry.info?.mirrors?.megaup || [];
+  const megaupMirrors = mergeMirrors(entry.info?.mirrors?.megaup, CURRENT_MEGAUP_MIRRORS);
   if (!episodeData) {
     trace.push(`fast: no episode data for ${season}x${episode}`);
     return null;
@@ -80,25 +105,31 @@ async function tryDatabasePath(
     (v, i, arr) => arr.indexOf(v) === i
   );
 
-  for (const track of audioTracks) {
-    const sources = episodeData.sources?.[track];
-    if (!sources) continue;
+  // Mirror as the outer loop: if one is entirely down, a single timeout
+  // retires it instead of re-waiting on it for every track/server combo.
+  for (const mirror of megaupMirrors) {
+    let mirrorDead = false;
 
-    for (const serverKey of ["server1", "server2"]) {
-      const path = sources[serverKey];
-      if (!path) continue;
+    for (const track of audioTracks) {
+      if (mirrorDead) break;
+      const sources = episodeData.sources?.[track];
+      if (!sources) continue;
 
-      for (const mirror of megaupMirrors) {
+      for (const serverKey of ["server1", "server2"]) {
+        if (mirrorDead) break;
+        const path = sources[serverKey];
+        if (!path) continue;
+
         try {
           const result = await decryptHosterMedia(`${mirror}${path}`, mirror);
           if (result) return { ...result, referer: mirror };
           trace.push(`fast: ${mirror} (${track}/${serverKey}) decrypted to no URL`);
         } catch (err) {
-          trace.push(
-            `fast: ${mirror} (${track}/${serverKey}) failed - ${
-              err instanceof Error ? err.message : String(err)
-            }`
-          );
+          const message = err instanceof Error ? err.message : String(err);
+          trace.push(`fast: ${mirror} (${track}/${serverKey}) failed - ${message}`);
+          if (message.includes("timed out") || message.includes("fetch failed")) {
+            mirrorDead = true;
+          }
         }
       }
     }
@@ -117,7 +148,7 @@ async function tryLiveScrape(
   trace: string[]
 ): Promise<{ url: string; referer: string; subtitles: SubtitleTrack[] } | null> {
   const watchPath = entry.info?.kai_watch;
-  const animekaiMirrors = entry.info?.mirrors?.animekai || [];
+  const animekaiMirrors = mergeMirrors(entry.info?.mirrors?.animekai, CURRENT_ANIMEKAI_MIRRORS);
   if (!watchPath) {
     trace.push("live: no kai_watch path in database entry");
     return null;
@@ -132,7 +163,7 @@ async function tryLiveScrape(
       const kaiHeaders = { "User-Agent": USER_AGENT, Referer: site, Accept: "application/json" };
 
       // 1. Fetch the watch page and extract animekai's internal content id.
-      const pageResp = await fetch(`${site}${watchPath}`, {
+      const pageResp = await fetchWithTimeout(`${site}${watchPath}`, {
         headers: { "User-Agent": USER_AGENT },
       });
       if (!pageResp.ok) {
@@ -148,10 +179,10 @@ async function tryLiveScrape(
       const contentId = idMatch[1];
 
       // 2. Encrypt the content id, then fetch + parse the episodes list.
-      const encIdResp = await fetch(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(contentId)}`);
+      const encIdResp = await fetchWithTimeout(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(contentId)}`);
       const encId = await validate<string>(encIdResp, "enc-kai (content id)");
 
-      const episodesResp = await fetch(
+      const episodesResp = await fetchWithTimeout(
         `${site}ajax/episodes/list?ani_id=${contentId}&_=${encId}`,
         { headers: kaiHeaders }
       );
@@ -161,7 +192,7 @@ async function tryLiveScrape(
         continue;
       }
 
-      const episodesParsedResp = await fetch(`${ENC_DEC_API}/parse-html`, {
+      const episodesParsedResp = await fetchWithTimeout(`${ENC_DEC_API}/parse-html`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: episodesJson.result }),
@@ -178,10 +209,10 @@ async function tryLiveScrape(
       }
 
       // 3. Encrypt the episode token, then fetch + parse the servers list.
-      const encTokenResp = await fetch(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(token)}`);
+      const encTokenResp = await fetchWithTimeout(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(token)}`);
       const encToken = await validate<string>(encTokenResp, "enc-kai (token)");
 
-      const serversResp = await fetch(`${site}ajax/links/list?token=${token}&_=${encToken}`, {
+      const serversResp = await fetchWithTimeout(`${site}ajax/links/list?token=${token}&_=${encToken}`, {
         headers: kaiHeaders,
       });
       const serversJson = await serversResp.json();
@@ -190,7 +221,7 @@ async function tryLiveScrape(
         continue;
       }
 
-      const serversParsedResp = await fetch(`${ENC_DEC_API}/parse-html`, {
+      const serversParsedResp = await fetchWithTimeout(`${ENC_DEC_API}/parse-html`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: serversJson.result }),
@@ -214,10 +245,10 @@ async function tryLiveScrape(
 
           try {
             // 4. Encrypt the server lid, fetch the embed view, and decrypt it.
-            const encLidResp = await fetch(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(lid)}`);
+            const encLidResp = await fetchWithTimeout(`${ENC_DEC_API}/enc-kai?text=${encodeURIComponent(lid)}`);
             const encLid = await validate<string>(encLidResp, "enc-kai (lid)");
 
-            const embedResp = await fetch(`${site}ajax/links/view?id=${lid}&_=${encLid}`, {
+            const embedResp = await fetchWithTimeout(`${site}ajax/links/view?id=${lid}&_=${encLid}`, {
               headers: kaiHeaders,
             });
             const embedJson = await embedResp.json();
@@ -226,7 +257,7 @@ async function tryLiveScrape(
               continue;
             }
 
-            const decKaiResp = await fetch(`${ENC_DEC_API}/dec-kai`, {
+            const decKaiResp = await fetchWithTimeout(`${ENC_DEC_API}/dec-kai`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ text: embedJson.result }),
@@ -263,57 +294,56 @@ export async function GET(request: Request) {
   const episode = searchParams.get("episode") || "1";
   const preferredAudio = searchParams.get("audio") === "dub" ? "dub" : "sub";
 
-  if (!anilistId) {
-    return NextResponse.json({ error: "anilistId is required" }, { status: 400 });
-  }
-
-  try {
-    const findResp = await fetch(`${KAI_DB}/find?anilist_id=${encodeURIComponent(anilistId)}`);
-    if (!findResp.ok) {
-      return NextResponse.json(
-        { error: `kai database lookup failed: ${findResp.status}` },
-        { status: 502 }
-      );
+  return ndjsonResponse(async (send) => {
+    if (!anilistId) {
+      send({ type: "error", error: "anilistId is required" });
+      return;
     }
-    const entries: KaiEntry[] = await findResp.json();
-    if (!Array.isArray(entries) || entries.length === 0) {
-      return NextResponse.json(
-        { error: "This title isn't in the animekai database yet" },
-        { status: 404 }
+
+    try {
+      send({ type: "status", message: "Looking up episode..." });
+      const findResp = await fetchWithTimeout(`${KAI_DB}/find?anilist_id=${encodeURIComponent(anilistId)}`);
+      if (!findResp.ok) {
+        send({ type: "error", error: `kai database lookup failed: ${findResp.status}` });
+        return;
+      }
+      const entries: KaiEntry[] = await findResp.json();
+      if (!Array.isArray(entries) || entries.length === 0) {
+        send({ type: "error", error: "This title isn't in the animekai database yet" });
+        return;
+      }
+      const entry = entries[0];
+      const trace: string[] = [];
+
+      send({ type: "status", message: "Connecting to Server 1..." });
+      const fast = await tryDatabasePath(entry, season, episode, preferredAudio, trace).catch(
+        (err) => {
+          trace.push(`fast: threw - ${err instanceof Error ? err.message : String(err)}`);
+          return null;
+        }
       );
+      if (fast) {
+        send({ type: "result", ...fast, source: "animekai" });
+        return;
+      }
+
+      send({ type: "status", message: "Server 1 unavailable, scanning for a live source..." });
+      const live = await tryLiveScrape(entry, season, episode, preferredAudio, trace).catch(
+        (err) => {
+          trace.push(`live: threw - ${err instanceof Error ? err.message : String(err)}`);
+          return null;
+        }
+      );
+      if (live) {
+        send({ type: "result", ...live, source: "animekai" });
+        return;
+      }
+
+      console.error("AnimeKai: all sources failed", trace);
+      send({ error: "All known servers for this episode are currently unreachable", type: "error", trace });
+    } catch (error) {
+      console.error("AnimeKai stream error:", error);
+      send({ type: "error", error: error instanceof Error ? error.message : "Unknown error" });
     }
-    const entry = entries[0];
-    const trace: string[] = [];
-
-    const fast = await tryDatabasePath(entry, season, episode, preferredAudio, trace).catch(
-      (err) => {
-        trace.push(`fast: threw - ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }
-    );
-    if (fast) return NextResponse.json(fast);
-
-    const live = await tryLiveScrape(entry, season, episode, preferredAudio, trace).catch(
-      (err) => {
-        trace.push(`live: threw - ${err instanceof Error ? err.message : String(err)}`);
-        return null;
-      }
-    );
-    if (live) return NextResponse.json(live);
-
-    console.error("AnimeKai: all sources failed", trace);
-    return NextResponse.json(
-      {
-        error: "All known servers for this episode are currently unreachable",
-        trace,
-      },
-      { status: 502 }
-    );
-  } catch (error) {
-    console.error("AnimeKai stream error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-  }
+  });
 }

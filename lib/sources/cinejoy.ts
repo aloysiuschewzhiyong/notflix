@@ -1,4 +1,5 @@
 import { findStreamUrl, findSubtitles, type SubtitleTrack } from "@/lib/stream-utils";
+import { fetchWithTimeout } from "@/lib/fetch-timeout";
 
 // cinejoy.pk resolves servers through a separate relay (api.wing.st) and
 // exchanges raw encrypted bytes rather than JSON text (see samples/cinejoy.py).
@@ -54,7 +55,7 @@ export async function fetchCinejoyStream(
   trace: string[]
 ): Promise<{ url: string; referer: string; subtitles: SubtitleTrack[] } | null> {
   try {
-    const serversResp = await fetch(`${WING_API}/servers`, { headers: HEADERS });
+    const serversResp = await fetchWithTimeout(`${WING_API}/servers`, { headers: HEADERS });
     if (!serversResp.ok) {
       trace.push(`cinejoy: servers list returned ${serversResp.status}`);
       return null;
@@ -87,12 +88,12 @@ export async function fetchCinejoyStream(
           wingUrl.searchParams.set("episode", params.episode || "1");
         }
 
-        const encResp = await fetch(
+        const encResp = await fetchWithTimeout(
           `${ENC_DEC_API}/enc-cinejoy?url=${encodeURIComponent(wingUrl.toString())}`
         );
         const enc = await validate<{ data: string; state: unknown }>(encResp, "enc-cinejoy");
 
-        const relayResp = await fetch(`${WING_API}/g`, {
+        const relayResp = await fetchWithTimeout(`${WING_API}/g`, {
           method: "POST",
           headers: HEADERS,
           body: base64UrlDecode(enc.data),
@@ -103,7 +104,7 @@ export async function fetchCinejoyStream(
         }
         const encryptedBuffer = Buffer.from(await relayResp.arrayBuffer());
 
-        const decResp = await fetch(`${ENC_DEC_API}/dec-cinejoy`, {
+        const decResp = await fetchWithTimeout(`${ENC_DEC_API}/dec-cinejoy`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: base64UrlEncode(encryptedBuffer), state: enc.state }),
