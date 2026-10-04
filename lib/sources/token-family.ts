@@ -66,14 +66,30 @@ export async function fetchTokenFamilyStream(
     }
     const extractedText = match[1];
 
-    const encResp = await fetchWithTimeout(
-      `${ENC_DEC_API}/enc-${source.slug}?text=${encodeURIComponent(extractedText)}`
+    // Stage 1: get a token-exchange URL, POST to it with the stage-1 CSRF token.
+    const stage1Resp = await fetchWithTimeout(
+      `${ENC_DEC_API}/enc-${source.slug}?text=${encodeURIComponent(extractedText)}&stage=1`
     );
-    const encData = await validate<{ servers: string; stream: string; token: string }>(
-      encResp,
-      `enc-${source.slug}`
+    const stage1 = await validate<{ stage1: string; token: string }>(
+      stage1Resp,
+      `enc-${source.slug} (stage 1)`
     );
-    const { servers, stream, token } = encData;
+
+    const stage1PostResp = await fetchWithTimeout(stage1.stage1, {
+      method: "POST",
+      headers: { ...headers, "X-CSRF-Token": stage1.token },
+    });
+    const stage1Text = await stage1PostResp.text();
+
+    // Stage 2: exchange that response for the real servers/stream endpoints.
+    const stage2Resp = await fetchWithTimeout(
+      `${ENC_DEC_API}/enc-${source.slug}?text=${encodeURIComponent(stage1Text)}&stage=2`
+    );
+    const { servers, stream, token } = await validate<{
+      servers: string;
+      stream: string;
+      token: string;
+    }>(stage2Resp, `enc-${source.slug} (stage 2)`);
 
     const serversResp = await fetchWithTimeout(servers, {
       method: "POST",
