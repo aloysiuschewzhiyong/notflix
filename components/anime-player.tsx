@@ -29,12 +29,12 @@ export function AnimePlayer({
     });
 
     const response = await fetch(`/api/stream/animekai?${params.toString()}`);
-    const data = await readNdjsonStream<{ url: string; referer?: string; subtitles?: StreamResult["subtitles"] }>(
+    const data = await readNdjsonStream<{ url: string; referer?: string; source?: string; subtitles?: StreamResult["subtitles"] }>(
       response,
       onStatus
     );
 
-    return { url: data.url, referer: data.referer, subtitles: data.subtitles };
+    return { url: data.url, referer: data.referer, source: data.source, subtitles: data.subtitles };
   };
 
   return (

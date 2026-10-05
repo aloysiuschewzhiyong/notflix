@@ -99,18 +99,19 @@ export async function GET(request: NextRequest) {
 
     const contentType = upstream.headers.get("content-type") || "";
 
-    if (isPlaylist(target, contentType)) {
-      const text = await upstream.text();
+    const playlistResponse = (text: string) => {
       const baseUrl = target.substring(0, target.lastIndexOf("/") + 1);
       const proxyBase = new URL("/api/stream/proxy", request.url).toString();
-      const rewritten = rewritePlaylist(text, baseUrl, proxyBase, referer);
-
-      return new NextResponse(rewritten, {
+      return new NextResponse(rewritePlaylist(text, baseUrl, proxyBase, referer), {
         headers: {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Cache-Control": "no-cache",
         },
       });
+    };
+
+    if (isPlaylist(target, contentType)) {
+      return playlistResponse(await upstream.text());
     }
 
     if (isSubtitle(target, contentType)) {
@@ -126,6 +127,13 @@ export async function GET(request: NextRequest) {
     }
 
     const buffer = await upstream.arrayBuffer();
+
+    // Some CDNs disguise playlists as images (playlist.jpg, image/jpeg) to dodge
+    // filtering, so go by the actual body rather than the URL or content type.
+    if (new TextDecoder().decode(buffer.slice(0, 7)) === "#EXTM3U") {
+      return playlistResponse(new TextDecoder().decode(buffer));
+    }
+
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType || "application/octet-stream",

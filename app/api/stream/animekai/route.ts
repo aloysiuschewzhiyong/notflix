@@ -315,7 +315,7 @@ export async function GET(request: Request) {
       const entry = entries[0];
       const trace: string[] = [];
 
-      send({ type: "status", message: "Connecting to Server 1..." });
+      send({ type: "status", message: "Trying animekai (megaup)..." });
       const fast = await tryDatabasePath(entry, season, episode, preferredAudio, trace).catch(
         (err) => {
           trace.push(`fast: threw - ${err instanceof Error ? err.message : String(err)}`);
@@ -327,7 +327,7 @@ export async function GET(request: Request) {
         return;
       }
 
-      send({ type: "status", message: "Server 1 unavailable, scanning for a live source..." });
+      send({ type: "status", message: "megaup unavailable, trying animekai live scrape..." });
       const live = await tryLiveScrape(entry, season, episode, preferredAudio, trace).catch(
         (err) => {
           trace.push(`live: threw - ${err instanceof Error ? err.message : String(err)}`);
